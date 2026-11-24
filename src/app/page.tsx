@@ -12,13 +12,31 @@ import { ConfigView } from '@/components/workspace/ConfigView';
 export default function Home() {
   const [activeTab, setActiveTab] = useState<NavTab>('WORKSPACE');
   const [selectedDocId, setSelectedDocId] = useState('cuda_kernel');
+  const [documentName, setDocumentName] = useState('cuda_kernel.pdf');
   const [activeCitation, setActiveCitation] = useState<number | null>(1);
   const [denseWeight, setDenseWeight] = useState(65);
   const [topK, setTopK] = useState(40);
   const [currentPage, setCurrentPage] = useState(4);
-  const [totalPages] = useState(18);
+  const [totalPages, setTotalPages] = useState(18);
   const [showAllBboxes, setShowAllBboxes] = useState(false);
   const [zoomPercent, setZoomPercent] = useState(100);
+
+  // Sənəd seçildikdə məlumatları dinamik yenilə
+  const handleSelectDoc = async (docId: string) => {
+    setSelectedDocId(docId);
+    try {
+      const res = await fetch(`/api/v1/documents/${docId}`);
+      if (res.ok) {
+        const doc = await res.json();
+        setDocumentName(doc.name);
+        setTotalPages(doc.totalPages || 1);
+        setCurrentPage(1);
+        setActiveCitation(null);
+      }
+    } catch {
+      // Keep existing name if mock id
+    }
+  };
 
   const handleCitationClick = (citationIndex: number) => {
     setActiveCitation(citationIndex);
@@ -53,7 +71,7 @@ export default function Home() {
             {/* Sol Panel: Sənədlər və Axtarış Nəzarəti (260px) */}
             <DocumentSidebar
               selectedDocId={selectedDocId}
-              onSelectDoc={setSelectedDocId}
+              onSelectDoc={handleSelectDoc}
               denseWeight={denseWeight}
               onDenseWeightChange={setDenseWeight}
               topK={topK}
@@ -70,7 +88,7 @@ export default function Home() {
 
             {/* Sağ Panel: Kağız Sənəd Evidence Canvas (#F8F7F4, 58%) */}
             <EvidenceCanvas
-              documentName="cuda_kernel.pdf"
+              documentName={documentName}
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={handlePageChange}

@@ -40,31 +40,77 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
 }) => {
   const [retrievalOpen, setRetrievalOpen] = useState(true);
   const [liveDocs, setLiveDocs] = useState<DocItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  const fetchLiveDocs = async () => {
+    try {
+      const res = await fetch('/api/v1/documents');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mapped: DocItem[] = data.map((d: any) => ({
+            id: d.id,
+            name: d.name,
+            size: `${(d.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
+            pages: d.totalPages || 1,
+            status: d.status === 'indexed' ? 'indexed' : 'processing',
+            icon: d.name.endsWith('.md') ? 'sheet' : 'text',
+          }));
+          setLiveDocs(mapped);
+        }
+      }
+    } catch {
+      // Fallback silently to initial docs
+    }
+  };
 
   useEffect(() => {
-    const fetchLiveDocs = async () => {
-      try {
-        const res = await fetch('/api/v1/documents');
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const mapped: DocItem[] = data.map((d: any) => ({
-              id: d.id,
-              name: d.name,
-              size: `${(d.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
-              pages: d.totalPages,
-              status: d.status === 'indexed' ? 'indexed' : 'processing',
-              icon: 'text',
-            }));
-            setLiveDocs(mapped);
-          }
-        }
-      } catch {
-        // Fallback silently to initial docs
-      }
-    };
     fetchLiveDocs();
   }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadProgress(`Uploading ${file.name}...`);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/v1/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Upload failed');
+      }
+
+      const newDoc = await res.json();
+      const mapped: DocItem = {
+        id: newDoc.id,
+        name: newDoc.name,
+        size: `${(newDoc.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
+        pages: newDoc.totalPages || 1,
+        status: 'indexed',
+        icon: newDoc.name.endsWith('.md') ? 'sheet' : 'text',
+      };
+
+      setLiveDocs((prev) => [mapped, ...prev.filter((d) => d.id !== mapped.id)]);
+      onSelectDoc(newDoc.id);
+      setUploadProgress(null);
+    } catch (err: any) {
+      alert(`Upload error: ${err.message}`);
+      setUploadProgress(null);
+    } finally {
+      setIsUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const defaultDocs: DocItem[] = [
     {
@@ -120,14 +166,20 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
       {/* Sənəd Yükləmə Dropzone */}
       <div className="p-3 border-b border-panelBorder">
         <label className="border border-dashed border-panelBorder hover:border-zinc-500 bg-obsidian/70 hover:bg-panelHover p-3 rounded-[2px] flex flex-col items-center justify-center text-center cursor-pointer transition group">
-          <Upload className="w-4 h-4 text-zinc-500 group-hover:text-textPrimary mb-1 transition" />
+          <Upload className={`w-4 h-4 ${isUploading ? 'text-accent animate-pulse' : 'text-zinc-500 group-hover:text-textPrimary'} mb-1 transition`} />
           <span className="text-xs font-sans text-textPrimary font-medium">
-            Upload Document
+            {isUploading ? (uploadProgress || 'Extracting coordinates...') : 'Upload Document'}
           </span>
           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-            PDF, Markdown up to 120MB
+            {isUploading ? 'PdfPig parsing bounding boxes...' : 'PDF, Markdown up to 120MB'}
           </span>
-          <input type="file" className="hidden" />
+          <input
+            type="file"
+            accept=".pdf,.md,.txt"
+            onChange={handleFileUpload}
+            disabled={isUploading}
+            className="hidden"
+          />
         </label>
       </div>
 

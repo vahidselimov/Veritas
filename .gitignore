@@ -8,6 +8,8 @@ node_modules/
 out/
 build/
 dist/
+uploads/
+backend/**/uploads/
 
 # .NET & C# build artifacts
 bin/
