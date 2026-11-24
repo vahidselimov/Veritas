@@ -105,6 +105,17 @@ flowchart LR
 - **SQL Injection Prevention:** 100% parameterized LINQ queries through EF Core 9.
 - **Single-Origin Gateway:** Zero CORS exposure during demonstrations or production rollouts.
 
+### 5. Deterministic Sub-Pixel Coordinate Engine (PdfPig)
+- Real-time PDF stream ingestion (`POST /api/v1/documents/upload`, up to 120MB, SHA-256 deduplication).
+- Converts 72 DPI bottom-left origin PDF coordinates into normalized DOM viewport coordinates $[0.0 .. 1.0]$:
+  $$normX = \frac{x_{pdf}}{W}, \quad normY = \frac{H - y_{top}}{H}, \quad normW = \frac{w}{W}, \quad normH = \frac{h}{H}$$
+- Chunks words into semantic blocks (~120 words), computes union bounding boxes per chunk, and indexes into PostgreSQL.
+
+### 6. Cloud-Resilient Runtime & Multi-Stage Docker
+- **Smart Gateway Handlers:** Next.js Route Handlers (`/health`, `/api/v1/documents/...`) dynamically detect backend state, proxying to .NET 9 when active and providing zero-crash preview fallbacks on cloud deployments (e.g. `ocaq.dev`).
+- **Multi-Stage Dockerfile:** Production container packaging .NET 9 SDK publish, Next.js 14 build, and unified Debian runner with `supervisord`.
+- **Stitch Optical Branding:** Precision reticle icon mark and 64x64 vector favicon.
+
 ---
 
 ## 🚀 Quick Start Guide
@@ -193,15 +204,17 @@ veritas/
 │   ├── Veritas.slnx                      # Modern .NET 9 Solution File
 │   └── src/
 │       ├── Veritas.Core.Domain/          # Domain Entities, Interfaces & pgvector types
-│       ├── Veritas.Core.Infrastructure/  # EF Core 9 VeritasDbContext, Npgsql, Migrations
+│       ├── Veritas.Core.Infrastructure/  # EF Core 9, Npgsql, PdfPig Spatial Engine
 │       └── Veritas.Core.Api/             # ASP.NET Core 9 Controllers, Swagger, Program.cs
 ├── src/                                  # Next.js 14 App Router Frontend
-│   ├── app/                              # Layout, Page, Global CSS
+│   ├── app/                              # Layout, Page, Route Handlers (/api/v1, /health)
 │   ├── components/workspace/             # Swiss Grid Components (AppChrome, Canvas, Sidebar)
 │   └── db/                               # Drizzle ORM Schema & TypeScript Seeder
+├── public/                               # Static Brand Assets (Stitch Brandmark & SVG Favicon)
 ├── e2e/                                  # Playwright End-to-End Test Suite
 ├── docker-compose.yml                    # PostgreSQL 16 + pgvector Container Config
-├── next.config.mjs                       # Next.js Config with Reverse Proxy Gateway
+├── Dockerfile                            # Production Multi-Stage Container (.NET 9 + Node 20)
+├── next.config.mjs                       # Next.js Reverse Proxy & Security Headers
 ├── package.json                          # NPM Scripts & Dependencies
 ├── PROJECT_RULES.md                      # Architecture & Design Standards
 └── README.md                             # Repository Documentation
@@ -213,8 +226,8 @@ veritas/
 
 - [x] **Week 1: Foundational Ingestion & Dual-Engine Infrastructure**
   - [x] Day 1: .NET 9 API, PostgreSQL pgvector, Next.js Swiss Grid UI, unified gateway.
-  - [ ] Day 2: Real PDF upload pipeline (`POST /api/v1/documents/upload`), `PdfPig` spatial parsing.
-  - [ ] Day 3: Character offset mapping, normalized coordinate caching.
+  - [x] Day 2: Real PDF upload pipeline (`POST /api/v1/documents/upload`), `PdfPig` sub-pixel spatial parsing, normalized BBox coordinate engine, ocaq.dev cloud route handlers & fallback, Stitch brandmark & reticle favicon integration.
+  - [ ] Day 3: Character offset mapping, multi-column XY-Cut reading order, normalized coordinate caching.
   - [ ] Day 4: Multi-document ingestion batching & validation.
   - [ ] Day 5: Optical reticle zoom mechanics & Week 1 milestone freeze.
 - [ ] **Week 2: Spatial Parsing & Bounding Box Normalization Engine**
