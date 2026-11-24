@@ -5,6 +5,13 @@ export const metadata: Metadata = {
   title: 'VERITAS // CORPUS — Engineering Grounded Research AI',
   description:
     'Visual Grounded Deep Research AI platform with deterministic PDF sub-pixel bounding box verification and hybrid RRF retrieval.',
+  icons: {
+    icon: [
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
 };
 
 export default function RootLayout({

@@ -55,7 +55,23 @@ export const AppChrome: React.FC<AppChromeProps> = ({
       {/* Sol Bölmə: Logo və Sistem Əməliyyat Statusu */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 font-medium text-textPrimary text-xs">
-          <span className="inline-block w-2 h-2 bg-zinc-300 rounded-[1px]" />
+          {/* VERITAS Precision Optical Reticle & Monogram (Stitch Brandmark) */}
+          <svg
+            className="w-4 h-4 shrink-0"
+            viewBox="0 0 64 64"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-label="VERITAS Monogram"
+          >
+            <rect width="64" height="64" fill="#131316" stroke="#27272A" strokeWidth="2" />
+            <path d="M 0 12 L 0 0 L 12 0" stroke="#F59E0B" strokeWidth="3" fill="none" />
+            <path d="M 52 0 L 64 0 L 64 12" stroke="#F59E0B" strokeWidth="3" fill="none" />
+            <path d="M 64 52 L 64 64 L 52 64" stroke="#F59E0B" strokeWidth="3" fill="none" />
+            <path d="M 12 64 L 0 64 L 0 52" stroke="#F59E0B" strokeWidth="3" fill="none" />
+            <path d="M 16 18 L 32 46 L 48 18" stroke="#F4F4F5" strokeWidth="4.5" strokeLinecap="square" strokeLinejoin="miter" fill="none" />
+            <circle cx="32" cy="46" r="3.5" fill="#F59E0B" />
+            <line x1="32" y1="12" x2="32" y2="18" stroke="#F59E0B" strokeWidth="2" />
+          </svg>
           <span className="font-semibold tracking-normal text-textPrimary">
             VERITAS
           </span>
