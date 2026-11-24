@@ -180,3 +180,16 @@ Burada $k = 60$ olaraq təyin edilir, $w_{dense}$ və $w_{sparse}$ isə UI slayd
    Hər bir əsas funksiya (sitat kliklənməsi, səhifə çevrilməsi, trace açılması) Playwright E2E testləri ilə təsdiqlənmədən "tamamlandı" elan edilə bilməz.
 4. **Skills İstifadə Qaydası:**
    Qoşulmuş 266 bacarıq (Dex, Taste-skill, Vercel suite, Kotaemon, Onyx, Supabase, Context7, Strix, Driver.js) iş zamanı avtonom şəkildə aktivləşdirilməlidir.
+
+---
+
+## 5. İŞ REJİMİ VƏ GÜNÜN SONU PROTOKOLU (DAILY WRAP-UP PROTOCOL)
+
+İstifadəçi günün sonunda **"fso bu gün bitdi"**, **"bu günlük bu qədər"** və ya oxşar yekun ifadəsi bildirdikdə, sistem avtomatik olaraq bu qızıl qayda üzrə hərəkət edir:
+1. **Günün İşlərinin Təhlili:** Gün ərzində yazılmış bütün kodlar, əlavə olunmuş komponentlər, düzəldilmiş xətalar və arxitektur irəliləyişlər analiz edilir.
+2. **README.md Sinxronizasiyası:**
+   - 6 Həftəlik Yol Xəritəsində (`Roadmap`) günə aid bəndlər `[x]` ilə tamamlanır və icra olunan dəqiq detallar əlavə edilir.
+   - Əsas funksionallıqlar, yeni API endpoint-lər və qovluq strukturu tam yenilənir.
+3. **Avtomatik Git Commit & Push Hazırlığı:**
+   - Bütün dəyişikliklər standart konvensiyalı commit mesajı ilə (`docs: update README with daily progress ...`) commit edilir və repozitoriyaya göndərilir.
+4. **Xülasə və Sabahkı Plan:** İstifadəçiyə günün rəsmi yekun xülasəsi və növbəti iş gününün ilk addımları aydın təqdim olunur.
