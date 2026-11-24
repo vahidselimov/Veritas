@@ -39,20 +39,12 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/v1/:path*',
-        destination: 'http://localhost:5000/api/v1/:path*',
-      },
-      {
         source: '/swagger/:path*',
         destination: 'http://localhost:5000/swagger/:path*',
       },
       {
         source: '/swagger',
         destination: 'http://localhost:5000/swagger/index.html',
-      },
-      {
-        source: '/health',
-        destination: 'http://localhost:5000/health',
       },
     ];
   },

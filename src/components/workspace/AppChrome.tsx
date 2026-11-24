@@ -25,15 +25,24 @@ export const AppChrome: React.FC<AppChromeProps> = ({
   chunksCount = 1480,
   latencyMs = 14,
 }) => {
-  const [apiOnline, setApiOnline] = React.useState<boolean | null>(null);
+  const [engineStatus, setEngineStatus] = React.useState<'online' | 'standby' | 'checking'>('checking');
 
   React.useEffect(() => {
     const checkApi = async () => {
       try {
         const res = await fetch('/health');
-        setApiOnline(res.ok);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.framework?.includes('.NET 9') || data.database?.includes('5433')) {
+            setEngineStatus('online');
+          } else {
+            setEngineStatus('standby');
+          }
+        } else {
+          setEngineStatus('standby');
+        }
       } catch {
-        setApiOnline(false);
+        setEngineStatus('standby');
       }
     };
     checkApi();
@@ -61,18 +70,18 @@ export const AppChrome: React.FC<AppChromeProps> = ({
         <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[11px] font-mono">
           <span
             className={`w-1.5 h-1.5 rounded-full ${
-              apiOnline === true
+              engineStatus === 'online'
                 ? 'bg-status-pass animate-pulse'
-                : apiOnline === false
-                ? 'bg-red-500'
+                : engineStatus === 'standby'
+                ? 'bg-amber-400'
                 : 'bg-zinc-500'
             }`}
           />
-          <span className={apiOnline ? 'text-zinc-200' : 'text-zinc-500'}>
-            {apiOnline === true
+          <span className={engineStatus === 'online' ? 'text-zinc-200' : 'text-zinc-400'}>
+            {engineStatus === 'online'
               ? '.NET 9 Core: ONLINE (Unified)'
-              : apiOnline === false
-              ? '.NET 9 Core: OFFLINE'
+              : engineStatus === 'standby'
+              ? '.NET 9 Core: STANDBY (Cloud Preview)'
               : 'Checking .NET 9...'}
           </span>
         </div>
