@@ -159,7 +159,7 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
           <span className="font-medium text-textPrimary">Indexed Documents</span>
         </div>
         <span className="text-[11px] text-zinc-400 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] font-mono">
-          4 sources
+          {docs.length} sources
         </span>
       </div>
 

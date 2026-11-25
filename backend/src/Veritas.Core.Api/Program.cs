@@ -12,8 +12,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<VeritasDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector()));
 
-// Register PDF spatial extraction service
+// Register memory cache & PDF spatial services
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IPdfCoordinateExtractor, PdfSpatialParserService>();
+builder.Services.AddScoped<ICoordinateCacheService, CoordinateCacheService>();
 
 // CORS configuration for Next.js BFF
 builder.Services.AddCors(options =>

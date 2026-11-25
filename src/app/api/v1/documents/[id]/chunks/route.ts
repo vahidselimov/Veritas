@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { buildFallbackChunks } from '@/lib/fallback-coordinates';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
 
@@ -7,14 +8,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   const { id } = params;
-  const pageNumber = req.nextUrl.searchParams.get('pageNumber');
+  const pageParam = req.nextUrl.searchParams.get('pageNumber');
+  const pageNumber = pageParam ? Number(pageParam) : null;
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const url = new URL(`${CORE_API_URL}/api/v1/documents/${id}/chunks`);
-    if (pageNumber) url.searchParams.set('pageNumber', pageNumber);
+    if (pageParam) url.searchParams.set('pageNumber', pageParam);
 
     const res = await fetch(url.toString(), {
       signal: controller.signal,
@@ -24,33 +26,16 @@ export async function GET(
 
     if (res.ok) {
       const data = await res.json();
-      return NextResponse.json(data);
+      return NextResponse.json(data, {
+        headers: {
+          'X-Coordinate-Cache': res.headers.get('X-Coordinate-Cache') || 'MISS',
+          'X-Coordinate-Lookup-Ms': res.headers.get('X-Coordinate-Lookup-Ms') || '0',
+        },
+      });
     }
   } catch {
     // Fallback
   }
 
-  // Fallback chunks
-  return NextResponse.json([
-    {
-      id: 'chunk-1',
-      documentId: id,
-      chunkIndex: 0,
-      pageNumber: 4,
-      content:
-        'By bypassing the standard runtime pinned memory allocations through unified virtual memory addressing and custom ring-buffer pools...',
-      bbox: { x: 0.08, y: 0.28, w: 0.84, h: 0.12 },
-      tokenCount: 42,
-    },
-    {
-      id: 'chunk-2',
-      documentId: id,
-      chunkIndex: 1,
-      pageNumber: 4,
-      content:
-        'Furthermore, asynchronous Direct Memory Access (DMA) transfers are directly mapped into contiguous physical host registers...',
-      bbox: { x: 0.08, y: 0.44, w: 0.84, h: 0.14 },
-      tokenCount: 48,
-    },
-  ]);
+  return NextResponse.json(buildFallbackChunks(id, pageNumber));
 }

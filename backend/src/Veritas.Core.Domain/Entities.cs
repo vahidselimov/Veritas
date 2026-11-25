@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using Pgvector;
 
@@ -29,6 +30,24 @@ namespace Veritas.Core.Domain.Entities
         }
     }
 
+    public class LineBoundingBox : BoundingBox
+    {
+        [JsonPropertyName("charStart")]
+        public int CharStart { get; set; }
+
+        [JsonPropertyName("charEnd")]
+        public int CharEnd { get; set; }
+
+        public LineBoundingBox() { }
+
+        public LineBoundingBox(double x, double y, double w, double h, int charStart, int charEnd)
+            : base(x, y, w, h)
+        {
+            CharStart = charStart;
+            CharEnd = charEnd;
+        }
+    }
+
     public class Document
     {
         public Guid Id { get; set; } = Guid.NewGuid();
@@ -51,8 +70,14 @@ namespace Veritas.Core.Domain.Entities
         public Document? Document { get; set; }
         public int ChunkIndex { get; set; }
         public int PageNumber { get; set; }
+        public int ColumnIndex { get; set; } = 0;
+        public int ReadingOrder { get; set; } = 0;
+        public int CharStartIndex { get; set; } = 0;
+        public int CharEndIndex { get; set; } = 0;
+        public string BlockType { get; set; } = "paragraph";
         public string Content { get; set; } = string.Empty;
         public BoundingBox Bbox { get; set; } = new BoundingBox();
+        public List<LineBoundingBox> LineBboxes { get; set; } = new();
         public int TokenCount { get; set; }
         
         [JsonIgnore]

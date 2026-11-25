@@ -10,7 +10,7 @@ export async function GET(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     const res = await fetch(`${CORE_API_URL}/api/v1/documents/${id}`, {
       signal: controller.signal,

@@ -57,11 +57,13 @@ async function seed() {
   // Mövcud parçaları təmizləyirik ki, dublikat olmasın
   await db.delete(documentChunks).where(sql`${documentChunks.documentId} = ${docId}`);
 
-  const chunksData = [
+  const rawChunks = [
     {
-      documentId: docId,
       chunkIndex: 112,
       pageNumber: 4,
+      columnIndex: 0,
+      readingOrder: 0,
+      blockType: 'paragraph',
       content:
         'By bypassing the standard runtime pinned memory allocations through unified virtual memory addressing and custom ring-buffer pools, the CUDA host allocator completely eliminates runtime kernel page locking faults. In typical synchronous drivers, operating systems incur non-trivial TLB invalidation and mprotect overhead when pinning memory slabs.',
       bbox: {
@@ -71,12 +73,13 @@ async function seed() {
         h: 0.11,
       },
       tokenCount: 52,
-      embedding: createDummyEmbedding(112),
     },
     {
-      documentId: docId,
       chunkIndex: 115,
       pageNumber: 4,
+      columnIndex: 0,
+      readingOrder: 1,
+      blockType: 'paragraph',
       content:
         'Furthermore, asynchronous Direct Memory Access (DMA) transfers are directly mapped into contiguous physical host registers, ensuring predictable p99 throughput without TLB thrashing or PCI-e saturation bottlenecks during massive mini-batch pipelining.',
       bbox: {
@@ -86,12 +89,13 @@ async function seed() {
         h: 0.09,
       },
       tokenCount: 41,
-      embedding: createDummyEmbedding(115),
     },
     {
-      documentId: docId,
       chunkIndex: 119,
       pageNumber: 4,
+      columnIndex: 0,
+      readingOrder: 2,
+      blockType: 'paragraph',
       content:
         'Benchmarking on eight interconnected H100 SXM5 nodes demonstrates that zero-copy ring arbiter streaming achieves 98.4% of peak PCIe Gen5 line-rate bandwidth (62.8 GB/s), compared to only 71.2% observed in default unified memory drivers under heavy thrash conditions.',
       bbox: {
@@ -101,9 +105,23 @@ async function seed() {
         h: 0.10,
       },
       tokenCount: 47,
-      embedding: createDummyEmbedding(119),
     },
   ];
+
+  let cursor = 0;
+  const chunksData = rawChunks.map((rc) => {
+    const start = cursor;
+    const end = start + rc.content.length;
+    cursor = end + 1;
+    return {
+      documentId: docId,
+      ...rc,
+      charStartIndex: start,
+      charEndIndex: end,
+      lineBboxes: [{ ...rc.bbox, charStart: start, charEnd: end }],
+      embedding: createDummyEmbedding(rc.chunkIndex),
+    };
+  });
 
   for (const chunk of chunksData) {
     await db.insert(documentChunks).values(chunk);

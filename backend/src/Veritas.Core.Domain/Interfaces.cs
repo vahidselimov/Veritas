@@ -15,6 +15,29 @@ namespace Veritas.Core.Domain.Interfaces
         );
     }
 
+    public class CoordinateCacheResult
+    {
+        public Guid DocumentId { get; set; }
+        public int? PageNumber { get; set; }
+        public bool CacheHit { get; set; }
+        public double LookupMs { get; set; }
+        public int ColumnCount { get; set; }
+        public int TotalCharacters { get; set; }
+        public List<DocumentChunk> Chunks { get; set; } = new();
+    }
+
+    public interface ICoordinateCacheService
+    {
+        Task<CoordinateCacheResult> GetOrLoadChunksAsync(
+            Guid documentId,
+            int? pageNumber = null,
+            CancellationToken cancellationToken = default
+        );
+
+        void WarmDocumentCache(Guid documentId, IEnumerable<DocumentChunk> chunks);
+        void InvalidateDocumentCache(Guid documentId);
+    }
+
     public class SearchCandidate
     {
         public DocumentChunk Chunk { get; set; } = new DocumentChunk();

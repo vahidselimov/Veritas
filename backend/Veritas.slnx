@@ -1,5 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Veritas.Core.Domain/Veritas.Core.Domain.csproj" />
+    <Project Path="src/Veritas.Core.Infrastructure/Veritas.Core.Infrastructure.csproj" />
+    <Project Path="src/Veritas.Core.Api/Veritas.Core.Api.csproj" />
   </Folder>
 </Solution>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { AppChrome, NavTab } from '@/components/workspace/AppChrome';
 import { DocumentSidebar } from '@/components/workspace/DocumentSidebar';
 import { ResearchStream } from '@/components/workspace/ResearchStream';
@@ -8,6 +8,7 @@ import { EvidenceCanvas } from '@/components/workspace/EvidenceCanvas';
 import { CorpusView } from '@/components/workspace/CorpusView';
 import { EvalsView } from '@/components/workspace/EvalsView';
 import { ConfigView } from '@/components/workspace/ConfigView';
+import type { CoordinateCacheDto, DocumentChunkDto } from '@/types/document';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<NavTab>('WORKSPACE');
@@ -21,21 +22,69 @@ export default function Home() {
   const [showAllBboxes, setShowAllBboxes] = useState(false);
   const [zoomPercent, setZoomPercent] = useState(100);
 
-  // Sənəd seçildikdə məlumatları dinamik yenilə
-  const handleSelectDoc = async (docId: string) => {
+  const [pageChunks, setPageChunks] = useState<DocumentChunkDto[]>([]);
+  const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null);
+  const [cacheTelemetry, setCacheTelemetry] = useState<{
+    cacheHit: boolean;
+    lookupMs: number;
+    columnCount: number;
+  } | null>(null);
+  const [latencyMs, setLatencyMs] = useState(14);
+
+  const fetchCoordinates = useCallback(async (docId: string, page: number) => {
+    try {
+      const res = await fetch(
+        `/api/v1/documents/${docId}/coordinates?pageNumber=${page}`,
+        { cache: 'no-store' }
+      );
+      if (res.ok) {
+        const data: CoordinateCacheDto = await res.json();
+        setPageChunks(data.chunks || []);
+        setCacheTelemetry({
+          cacheHit: data.cacheHit,
+          lookupMs: data.lookupMs,
+          columnCount: data.columnCount || 1,
+        });
+        setLatencyMs(Math.max(1, Math.round(data.lookupMs)));
+        if (data.chunks && data.chunks.length > 0) {
+          setSelectedChunkId(data.chunks[0].id);
+        } else {
+          setSelectedChunkId(null);
+        }
+      }
+    } catch {
+      setPageChunks([]);
+      setCacheTelemetry(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCoordinates(selectedDocId, currentPage);
+  }, [selectedDocId, currentPage, fetchCoordinates]);
+
+  // Sənəd seçildikdə məlumatları və koordinat keşini dinamik yenilə
+  const handleSelectDoc = async (docId: string, preferredPage?: number) => {
     setSelectedDocId(docId);
+    setActiveCitation(null);
     try {
       const res = await fetch(`/api/v1/documents/${docId}`);
       if (res.ok) {
         const doc = await res.json();
-        setDocumentName(doc.name);
+        const name = doc.name || documentName;
+        setDocumentName(name);
         setTotalPages(doc.totalPages || 1);
-        setCurrentPage(1);
-        setActiveCitation(null);
+        const targetPage =
+          preferredPage ?? (name === 'cuda_kernel.pdf' ? 4 : 1);
+        setCurrentPage(targetPage);
+        if (name === 'cuda_kernel.pdf' && targetPage === 4) {
+          setActiveCitation(1);
+        }
+        return;
       }
     } catch {
-      // Keep existing name if mock id
+      // Fallback for mock id
     }
+    setCurrentPage(preferredPage ?? 1);
   };
 
   const handleCitationClick = (citationIndex: number) => {
@@ -53,6 +102,11 @@ export default function Home() {
     setZoomPercent((prev) => Math.min(Math.max(prev + delta, 60), 160));
   };
 
+  const handleInspectFromCorpus = (docId: string, pageNumber = 1) => {
+    setActiveTab('WORKSPACE');
+    handleSelectDoc(docId, pageNumber);
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-obsidian text-textPrimary">
       {/* 1. Ümumi Yuxarı Header (App Chrome) */}
@@ -60,7 +114,7 @@ export default function Home() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         chunksCount={1480}
-        latencyMs={14}
+        latencyMs={latencyMs}
       />
 
       {/* 2. Əsas Dinamik Ekran */}
@@ -97,12 +151,18 @@ export default function Home() {
               onToggleAllBboxes={() => setShowAllBboxes(!showAllBboxes)}
               zoomPercent={zoomPercent}
               onZoomChange={handleZoomChange}
+              pageChunks={pageChunks}
+              cacheTelemetry={cacheTelemetry}
+              selectedChunkId={selectedChunkId}
+              onSelectChunk={setSelectedChunkId}
             />
           </div>
         )}
 
         {/* VIEW 2: CORPUS & CHUNK COORDINATE INSPECTOR */}
-        {activeTab === 'CORPUS' && <CorpusView />}
+        {activeTab === 'CORPUS' && (
+          <CorpusView onInspectInWorkspace={handleInspectFromCorpus} />
+        )}
 
         {/* VIEW 3: GROUNDING BENCHMARKS & EVALS */}
         {activeTab === 'EVALS' && <EvalsView />}

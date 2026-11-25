@@ -77,4 +77,20 @@ test.describe('VERITAS // CORPUS — Swiss Grid Research Workspace E2E', () => {
     await page.getByRole('button', { name: 'Workspace' }).click();
     await expect(page.getByText('Indexed Documents')).toBeVisible();
   });
+
+  test('should inspect live chunk offsets, XY-Cut columns, and coordinate cache in Corpus Inspector', async ({ page }) => {
+    await page.goto('/');
+
+    // Corpus bölməsinə keçid və BBox + Char Offset inspektorunu açmaq
+    await page.getByRole('button', { name: 'Corpus' }).click();
+    await expect(page.getByText('XY-Cut').first()).toBeVisible();
+
+    const inspectBtn = page.getByRole('button', { name: 'INSPECT BBOX' }).first();
+    await expect(inspectBtn).toBeVisible();
+    await inspectBtn.click();
+
+    await expect(page.getByText(/COORDINATE & OFFSET INSPECTOR:/)).toBeVisible();
+    await expect(page.getByText(/CACHE: (HIT|MISS)/)).toBeVisible();
+    await expect(page.getByText(/CHARS: 0\.\./)).toBeVisible();
+  });
 });

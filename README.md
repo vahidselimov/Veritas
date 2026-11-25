@@ -106,7 +106,7 @@ flowchart LR
 - **Single-Origin Gateway:** Zero CORS exposure during demonstrations or production rollouts.
 
 ### 5. Deterministic Sub-Pixel Coordinate Engine (PdfPig)
-- Real-time PDF stream ingestion (`POST /api/v1/documents/upload`, up to 120MB, SHA-256 deduplication).
+- Real-time PDF stream ingestion (`POST /api/v1/documents/upload`, up to 120MB, SHA-256 integrity checksum).
 - Converts 72 DPI bottom-left origin PDF coordinates into normalized DOM viewport coordinates $[0.0 .. 1.0]$:
   $$normX = \frac{x_{pdf}}{W}, \quad normY = \frac{H - y_{top}}{H}, \quad normW = \frac{w}{W}, \quad normH = \frac{h}{H}$$
 - Chunks words into semantic blocks (~120 words), computes union bounding boxes per chunk, and indexes into PostgreSQL.
@@ -224,7 +224,7 @@ veritas/
 
 ## 🗓️ 6-Week Roadmap
 
-- [x] **Week 1: Foundational Ingestion & Dual-Engine Infrastructure**
+- [ ] **Week 1: Foundational Ingestion & Dual-Engine Infrastructure**
   - [x] Day 1: .NET 9 API, PostgreSQL pgvector, Next.js Swiss Grid UI, unified gateway.
   - [x] Day 2: Real PDF upload pipeline (`POST /api/v1/documents/upload`), `PdfPig` sub-pixel spatial parsing, normalized BBox coordinate engine, ocaq.dev cloud route handlers & fallback, Stitch brandmark & reticle favicon integration.
   - [ ] Day 3: Character offset mapping, multi-column XY-Cut reading order, normalized coordinate caching.
