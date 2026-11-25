@@ -7,7 +7,7 @@
 [![Framework](https://img.shields.io/badge/.NET-9.0%20(C%23%2013)-blue?style=flat-square)](https://dotnet.microsoft.com)
 [![Frontend](https://img.shields.io/badge/Next.js-14.2%20App%20Router-black?style=flat-square)](https://nextjs.org)
 [![Database](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-blueviolet?style=flat-square)](https://github.com/pgvector/pgvector)
-[![E2E Tests](https://img.shields.io/badge/Playwright-4%2F4%20Passing-success?style=flat-square)](https://playwright.dev)
+[![E2E Tests](https://img.shields.io/badge/Playwright-5%2F5%20Passing-success?style=flat-square)](https://playwright.dev)
 [![Architecture](https://img.shields.io/badge/UI%20Design-Swiss%20Grid%20Obsidian-orange?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
@@ -105,14 +105,16 @@ flowchart LR
 - **SQL Injection Prevention:** 100% parameterized LINQ queries through EF Core 9.
 - **Single-Origin Gateway:** Zero CORS exposure during demonstrations or production rollouts.
 
-### 5. Deterministic Sub-Pixel Coordinate Engine (PdfPig)
+### 5. Deterministic Sub-Pixel Coordinate Engine (PdfPig + XY-Cut)
 - Real-time PDF stream ingestion (`POST /api/v1/documents/upload`, up to 120MB, SHA-256 integrity checksum).
+- **Multi-Column XY-Cut Reading Order:** Recursively separates full-width headers from multi-column prose gutters without interleaving columns or shattering narrow table rows.
+- **Character Offset Mapping & Line BBoxes:** Computes exact monotonic `charStartIndex..charEndIndex` spans, sentence-boundary chunks, and line-level normalized `LineBoundingBox` arrays.
 - Converts 72 DPI bottom-left origin PDF coordinates into normalized DOM viewport coordinates $[0.0 .. 1.0]$:
   $$normX = \frac{x_{pdf}}{W}, \quad normY = \frac{H - y_{top}}{H}, \quad normW = \frac{w}{W}, \quad normH = \frac{h}{H}$$
-- Chunks words into semantic blocks (~120 words), computes union bounding boxes per chunk, and indexes into PostgreSQL.
+- **Normalized Coordinate Caching:** .NET 9 `IMemoryCache` version-token cache (`CoordinateCacheService`) serving pre-normalized page coordinates with `X-Coordinate-Cache: HIT|MISS` headers in `< 1ms`.
 
-### 6. Cloud-Resilient Runtime & Multi-Stage Docker
-- **Smart Gateway Handlers:** Next.js Route Handlers (`/health`, `/api/v1/documents/...`) dynamically detect backend state, proxying to .NET 9 when active and providing zero-crash preview fallbacks on cloud deployments (e.g. `ocaq.dev`).
+### 6. Cloud-Resilient Runtime, `pdfjs-dist` Parity & Multi-Stage Docker
+- **Smart Gateway & Cloud Parity:** Next.js Route Handlers (`/health`, `/api/v1/documents/...`) dynamically detect backend state—proxying to .NET 9 locally, and using an integrated **Node.js `pdfjs-dist` XY-Cut parser + persistent cloud store** when `.NET 9` is in standby (`ocaq.dev`), keeping `Flow`, `Spatial BBox`, `Upload`, and `Corpus` inspection 100% functional.
 - **Multi-Stage Dockerfile:** Production container packaging .NET 9 SDK publish, Next.js 14 build, and unified Debian runner with `supervisord`.
 - **Stitch Optical Branding:** Precision reticle icon mark and 64x64 vector favicon.
 
@@ -169,7 +171,10 @@ Everything is routed through the single unified gateway:
 | **Workspace UI** | [http://localhost:3000](http://localhost:3000) | 3-Pane Swiss Grid Deep Research Canvas |
 | **API Swagger UI** | [http://localhost:3000/swagger](http://localhost:3000/swagger) | Interactive OpenAPI / Swagger Documentation |
 | **Documents API** | [http://localhost:3000/api/v1/documents](http://localhost:3000/api/v1/documents) | Document collection & metadata |
+| **Document Summary** | [http://localhost:3000/api/v1/documents/summary](http://localhost:3000/api/v1/documents/summary) | Corpus stats (chunks, XY-Cut columns, char spans) |
+| **Coordinates Cache API** | [http://localhost:3000/api/v1/documents/{id}/coordinates](http://localhost:3000/api/v1/documents/{id}/coordinates) | Cached normalized BBoxes, line BBoxes & char offsets |
 | **Chunks API** | [http://localhost:3000/api/v1/documents/{id}/chunks](http://localhost:3000/api/v1/documents/{id}/chunks) | Spatial bounding box chunks & text offsets |
+| **Reparse API** | `POST /api/v1/documents/{id}/reparse` | Re-run XY-Cut layout parsing & warm coordinate cache |
 | **Health Check** | [http://localhost:3000/health](http://localhost:3000/health) | .NET 9 runtime & database telemetry |
 
 ---
@@ -204,11 +209,13 @@ veritas/
 │   ├── Veritas.slnx                      # Modern .NET 9 Solution File
 │   └── src/
 │       ├── Veritas.Core.Domain/          # Domain Entities, Interfaces & pgvector types
-│       ├── Veritas.Core.Infrastructure/  # EF Core 9, Npgsql, PdfPig Spatial Engine
+│       ├── Veritas.Core.Infrastructure/  # EF Core 9, Npgsql, PdfPig XY-Cut & CoordinateCacheService
 │       └── Veritas.Core.Api/             # ASP.NET Core 9 Controllers, Swagger, Program.cs
 ├── src/                                  # Next.js 14 App Router Frontend
 │   ├── app/                              # Layout, Page, Route Handlers (/api/v1, /health)
-│   ├── components/workspace/             # Swiss Grid Components (AppChrome, Canvas, Sidebar)
+│   ├── components/workspace/             # Swiss Grid Components (AppChrome, Canvas, CorpusView, Sidebar)
+│   ├── lib/                              # Cloud Parity Engine (node-pdf-parser, cloud-store)
+│   ├── types/                            # Shared TypeScript Contracts (DocumentChunkDto, CoordinateCacheDto)
 │   └── db/                               # Drizzle ORM Schema & TypeScript Seeder
 ├── public/                               # Static Brand Assets (Stitch Brandmark & SVG Favicon)
 ├── e2e/                                  # Playwright End-to-End Test Suite
@@ -227,9 +234,9 @@ veritas/
 - [ ] **Week 1: Foundational Ingestion & Dual-Engine Infrastructure**
   - [x] Day 1: .NET 9 API, PostgreSQL pgvector, Next.js Swiss Grid UI, unified gateway.
   - [x] Day 2: Real PDF upload pipeline (`POST /api/v1/documents/upload`), `PdfPig` sub-pixel spatial parsing, normalized BBox coordinate engine, ocaq.dev cloud route handlers & fallback, Stitch brandmark & reticle favicon integration.
-  - [ ] Day 3: Character offset mapping, multi-column XY-Cut reading order, normalized coordinate caching.
+  - [x] Day 3: Character offset mapping (`charStartIndex`, `charEndIndex`), multi-column XY-Cut reading order, normalized coordinate caching (`IMemoryCache` + `Flow`/`Spatial BBox` canvas + `Corpus` Coordinate Inspector + Node `pdfjs-dist` cloud parity).
   - [ ] Day 4: Multi-document ingestion batching & validation.
-  - [ ] Day 5: Optical reticle zoom mechanics & Week 1 milestone freeze.
+  - [ ] Day 5: Optical reticle zoom mechanics, responsive UI (Mobile/Tablet), & Week 1 milestone freeze.
 - [ ] **Week 2: Spatial Parsing & Bounding Box Normalization Engine**
 - [ ] **Week 3: Hybrid Retrieval & Reciprocal Rank Fusion (RRF)**
 - [ ] **Week 4: Grounded Synthesis & Interactive Streaming**
