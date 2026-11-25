@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCloudDocument } from '@/lib/cloud-store';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ) {
   const { id } = params;
@@ -24,6 +25,11 @@ export async function GET(
     }
   } catch {
     // Fallback
+  }
+
+  const cloudDoc = getCloudDocument(id);
+  if (cloudDoc) {
+    return NextResponse.json(cloudDoc);
   }
 
   return NextResponse.json({

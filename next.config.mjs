@@ -2,6 +2,9 @@
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false, // Security: suppress X-Powered-By: Next.js
+  experimental: {
+    serverComponentsExternalPackages: ['pdfjs-dist'],
+  },
   async headers() {
     return [
       {

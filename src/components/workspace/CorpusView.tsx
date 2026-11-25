@@ -24,6 +24,7 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
   const [inspectedDocName, setInspectedDocName] = useState<string>('');
   const [isInspecting, setIsInspecting] = useState(false);
   const [isReparsing, setIsReparsing] = useState<string | null>(null);
+  const [isIngesting, setIsIngesting] = useState(false);
 
   const loadSummaries = async () => {
     try {
@@ -36,6 +37,28 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
       }
     } catch {
       // Silent fallback to baseline list
+    }
+  };
+
+  const handleCorpusUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsIngesting(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch('/api/v1/documents/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (res.ok) {
+        const uploaded = await res.json();
+        await loadSummaries();
+        await handleInspectCoordinates({ id: uploaded.id, name: uploaded.name });
+      }
+    } finally {
+      setIsIngesting(false);
+      e.target.value = '';
     }
   };
 
@@ -176,13 +199,17 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
             />
           </div>
 
-          <button
-            onClick={() => onInspectInWorkspace?.(rows[0]?.id || 'cuda_kernel', 1)}
-            className="px-3 py-1 bg-accent text-obsidian font-mono font-bold text-xs rounded-[2px] hover:brightness-105 transition flex items-center gap-1.5"
-          >
+          <label className="px-3 py-1 bg-accent text-obsidian font-mono font-bold text-xs rounded-[2px] hover:brightness-105 transition flex items-center gap-1.5 cursor-pointer">
             <Plus className="w-3.5 h-3.5" />
-            <span>INGEST DOCUMENT</span>
-          </button>
+            <span>{isIngesting ? 'PARSING...' : 'INGEST DOCUMENT'}</span>
+            <input
+              type="file"
+              accept=".pdf,.md,.txt"
+              onChange={handleCorpusUpload}
+              disabled={isIngesting}
+              className="hidden"
+            />
+          </label>
         </div>
       </div>
 

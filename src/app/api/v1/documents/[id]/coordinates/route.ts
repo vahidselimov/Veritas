@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildFallbackCoordinateResult } from '@/lib/fallback-coordinates';
+import { getCloudCoordinates } from '@/lib/cloud-store';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
-
-// Lightweight Next.js memory cache for cloud preview fallback mode
-const fallbackCoordinateCache = new Map<string, { data: unknown; cachedAt: number }>();
 
 export async function GET(
   req: NextRequest,
@@ -29,12 +26,10 @@ export async function GET(
 
     if (res.ok) {
       const data = await res.json();
-      const cacheHeader = res.headers.get('X-Coordinate-Cache') || 'MISS';
-      const lookupMs = res.headers.get('X-Coordinate-Lookup-Ms') || '0';
       return NextResponse.json(data, {
         headers: {
-          'X-Coordinate-Cache': cacheHeader,
-          'X-Coordinate-Lookup-Ms': lookupMs,
+          'X-Coordinate-Cache': res.headers.get('X-Coordinate-Cache') || 'MISS',
+          'X-Coordinate-Lookup-Ms': res.headers.get('X-Coordinate-Lookup-Ms') || '0',
           'Cache-Control': 'private, max-age=60',
         },
       });
@@ -43,16 +38,11 @@ export async function GET(
     // Fallback when .NET 9 backend is in standby
   }
 
-  const cacheKey = `${id}:${pageNumber ?? 'all'}`;
-  const existing = fallbackCoordinateCache.get(cacheKey);
-  if (existing && Date.now() - existing.cachedAt < 300_000) {
-    return NextResponse.json(
-      { ...(existing.data as Record<string, unknown>), cacheHit: true, lookupMs: 0.08 },
-      { headers: { 'X-Coordinate-Cache': 'HIT' } }
-    );
-  }
-
-  const payload = buildFallbackCoordinateResult(id, pageNumber);
-  fallbackCoordinateCache.set(cacheKey, { data: payload, cachedAt: Date.now() });
-  return NextResponse.json(payload, { headers: { 'X-Coordinate-Cache': 'MISS' } });
+  const result = getCloudCoordinates(id, pageNumber);
+  return NextResponse.json(result, {
+    headers: {
+      'X-Coordinate-Cache': result.cacheHit ? 'HIT' : 'MISS',
+      'X-Coordinate-Lookup-Ms': String(result.lookupMs),
+    },
+  });
 }

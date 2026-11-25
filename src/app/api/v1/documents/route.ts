@@ -1,48 +1,7 @@
 import { NextResponse } from 'next/server';
+import { getCloudDocuments } from '@/lib/cloud-store';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
-
-const FALLBACK_DOCUMENTS = [
-  {
-    id: 'cuda_kernel',
-    name: 'cuda_kernel.pdf',
-    filePath: 'uploads/cuda_kernel.pdf',
-    mimeType: 'application/pdf',
-    fileSizeBytes: 3250585,
-    totalPages: 18,
-    checksum: 'sha256_8fa2b9c71e4d3a01',
-    status: 'indexed',
-    metadataJson: '{"author": "Dr. E. Vance", "institution": "MIT CSAIL"}',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'architecture_v2',
-    name: 'architecture_v2.pdf',
-    filePath: 'uploads/architecture_v2.pdf',
-    mimeType: 'application/pdf',
-    fileSizeBytes: 4404019,
-    totalPages: 42,
-    checksum: 'sha256_a1b2c3d4e5f60718',
-    status: 'indexed',
-    metadataJson: '{}',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 'rfc_9110',
-    name: 'rfc_9110.pdf',
-    filePath: 'uploads/rfc_9110.pdf',
-    mimeType: 'application/pdf',
-    fileSizeBytes: 1887436,
-    totalPages: 165,
-    checksum: 'sha256_f9e8d7c6b5a43210',
-    status: 'indexed',
-    metadataJson: '{}',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
 
 export async function GET() {
   try {
@@ -60,8 +19,8 @@ export async function GET() {
       return NextResponse.json(data);
     }
   } catch {
-    // Fallback if .NET API is not reachable
+    // Fallback if .NET API is in standby
   }
 
-  return NextResponse.json(FALLBACK_DOCUMENTS);
+  return NextResponse.json(getCloudDocuments());
 }

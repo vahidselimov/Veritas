@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { buildFallbackChunks } from '@/lib/fallback-coordinates';
+import { getCloudCoordinates } from '@/lib/cloud-store';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
 
@@ -37,5 +37,11 @@ export async function GET(
     // Fallback
   }
 
-  return NextResponse.json(buildFallbackChunks(id, pageNumber));
+  const result = getCloudCoordinates(id, pageNumber);
+  return NextResponse.json(result.chunks, {
+    headers: {
+      'X-Coordinate-Cache': result.cacheHit ? 'HIT' : 'MISS',
+      'X-Coordinate-Lookup-Ms': String(result.lookupMs),
+    },
+  });
 }

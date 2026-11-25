@@ -64,17 +64,17 @@ export default function Home() {
 
   // Sənəd seçildikdə məlumatları və koordinat keşini dinamik yenilə
   const handleSelectDoc = async (docId: string, preferredPage?: number) => {
-    setSelectedDocId(docId);
     setActiveCitation(null);
     try {
-      const res = await fetch(`/api/v1/documents/${docId}`);
+      const res = await fetch(`/api/v1/documents/${docId}`, { cache: 'no-store' });
       if (res.ok) {
         const doc = await res.json();
         const name = doc.name || documentName;
-        setDocumentName(name);
-        setTotalPages(doc.totalPages || 1);
         const targetPage =
           preferredPage ?? (name === 'cuda_kernel.pdf' ? 4 : 1);
+        setDocumentName(name);
+        setTotalPages(doc.totalPages || 1);
+        setSelectedDocId(docId);
         setCurrentPage(targetPage);
         if (name === 'cuda_kernel.pdf' && targetPage === 4) {
           setActiveCitation(1);
@@ -84,6 +84,7 @@ export default function Home() {
     } catch {
       // Fallback for mock id
     }
+    setSelectedDocId(docId);
     setCurrentPage(preferredPage ?? 1);
   };
 

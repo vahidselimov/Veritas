@@ -1,5 +1,11 @@
+import fs from 'node:fs';
 import { NextRequest, NextResponse } from 'next/server';
-import { buildFallbackCoordinateResult } from '@/lib/fallback-coordinates';
+import {
+  getCloudCoordinates,
+  getCloudDocument,
+  upsertCloudDocument,
+} from '@/lib/cloud-store';
+import { extractPdfWithNodeParser } from '@/lib/node-pdf-parser';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
 
@@ -24,14 +30,18 @@ export async function POST(
       return NextResponse.json(data);
     }
   } catch {
-    // Cloud preview fallback without surfacing 5xx browser console errors
+    // Cloud preview fallback
   }
 
-  return NextResponse.json(
-    {
-      ...buildFallbackCoordinateResult(id, null),
-      mode: 'cloud-preview-standby',
-    },
-    { headers: { 'X-Coordinate-Cache': 'MISS' } }
-  );
+  const existing = getCloudDocument(id);
+  if (existing && existing.filePath && fs.existsSync(existing.filePath) && existing.name.toLowerCase().endsWith('.pdf')) {
+    const buffer = fs.readFileSync(existing.filePath);
+    const parsed = await extractPdfWithNodeParser(buffer, id);
+    upsertCloudDocument({ ...existing, totalPages: parsed.totalPages, updatedAt: new Date().toISOString() }, parsed.chunks);
+  }
+
+  const cached = getCloudCoordinates(id, null);
+  return NextResponse.json(cached, {
+    headers: { 'X-Coordinate-Cache': cached.cacheHit ? 'HIT' : 'MISS' },
+  });
 }

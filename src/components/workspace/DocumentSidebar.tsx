@@ -41,11 +41,12 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   const [retrievalOpen, setRetrievalOpen] = useState(true);
   const [liveDocs, setLiveDocs] = useState<DocItem[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   const fetchLiveDocs = async () => {
     try {
-      const res = await fetch('/api/v1/documents');
+      const res = await fetch('/api/v1/documents', { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
@@ -69,10 +70,7 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
     fetchLiveDocs();
   }, []);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const uploadFile = async (file: File) => {
     setIsUploading(true);
     setUploadProgress(`Uploading ${file.name}...`);
 
@@ -108,7 +106,23 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
       setUploadProgress(null);
     } finally {
       setIsUploading(false);
-      e.target.value = '';
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await uploadFile(file);
+    e.target.value = '';
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (isUploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await uploadFile(file);
     }
   };
 
@@ -165,7 +179,17 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
 
       {/* Sənəd Yükləmə Dropzone */}
       <div className="p-3 border-b border-panelBorder">
-        <label className="border border-dashed border-panelBorder hover:border-zinc-500 bg-obsidian/70 hover:bg-panelHover p-3 rounded-[2px] flex flex-col items-center justify-center text-center cursor-pointer transition group">
+        <label
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`border border-dashed ${
+            isDragging ? 'border-accent bg-panelHover' : 'border-panelBorder hover:border-zinc-500 bg-obsidian/70 hover:bg-panelHover'
+          } p-3 rounded-[2px] flex flex-col items-center justify-center text-center cursor-pointer transition group`}
+        >
           <Upload className={`w-4 h-4 ${isUploading ? 'text-accent animate-pulse' : 'text-zinc-500 group-hover:text-textPrimary'} mb-1 transition`} />
           <span className="text-xs font-sans text-textPrimary font-medium">
             {isUploading ? (uploadProgress || 'Extracting coordinates...') : 'Upload Document'}
