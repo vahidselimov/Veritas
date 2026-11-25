@@ -69,20 +69,23 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
       : 1);
 
   return (
-    <section className="flex-1 bg-[#151518] flex flex-col overflow-hidden relative select-none">
+    <section className="flex-1 min-w-0 bg-[#151518] flex flex-col overflow-hidden relative select-none">
       {/* Evidence Canvas İdarəetmə Zolağı */}
-      <div className="h-10 border-b border-panelBorder bg-panel px-4 flex items-center justify-between text-xs font-mono shrink-0">
-        <div className="flex items-center gap-2 text-xs font-sans">
-          <span className="text-zinc-500">Document:</span>
-          <span className="font-medium text-textPrimary font-mono text-[11px]">
+      <div className="h-10 border-b border-panelBorder bg-panel px-3 flex items-center justify-between gap-2 text-xs font-mono shrink-0 overflow-hidden">
+        <div className="flex items-center gap-1.5 text-xs font-sans min-w-0 flex-1">
+          <span className="text-zinc-500 shrink-0 hidden 2xl:inline">Document:</span>
+          <span
+            className="font-medium text-textPrimary font-mono text-[11px] truncate"
+            title={documentName}
+          >
             {documentName}
           </span>
-          <span className="px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono">
-            p. {String(currentPage).padStart(2, '0')} / {totalPages}
+          <span className="px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono shrink-0 whitespace-nowrap">
+            p. {String(currentPage).padStart(2, '0')}/{totalPages}
           </span>
           {cacheTelemetry && (
             <span
-              className="hidden lg:inline-flex items-center gap-1 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono"
+              className="hidden xl:inline-flex items-center gap-1 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono shrink-0 whitespace-nowrap"
               title="Normalized Coordinate Cache Telemetry"
             >
               <span
@@ -91,17 +94,17 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                 }`}
               />
               <span>
-                COORD {cacheTelemetry.cacheHit ? 'HIT' : 'MISS'} •{' '}
-                {cacheTelemetry.lookupMs.toFixed(2)}ms • {detectedCols}-COL
+                {cacheTelemetry.cacheHit ? 'HIT' : 'MISS'} •{' '}
+                {cacheTelemetry.lookupMs.toFixed(2)}ms • {detectedCols}C
               </span>
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-2 text-xs font-sans">
+        <div className="flex items-center gap-1.5 text-xs font-sans shrink-0 whitespace-nowrap">
           {/* Reading Flow vs Spatial 2D Plane */}
           {!isSeededCudaView && sortedChunks.length > 0 && (
-            <div className="flex items-center border border-panelBorder rounded-[2px] bg-obsidian p-0.5 font-mono text-[10px]">
+            <div className="flex items-center border border-panelBorder rounded-[2px] bg-obsidian p-0.5 font-mono text-[10px] shrink-0">
               <button
                 onClick={() => setCanvasMode('flow')}
                 className={`px-1.5 py-0.5 flex items-center gap-1 rounded-[1px] transition ${
@@ -128,7 +131,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
           )}
 
           {/* Səhifələmə */}
-          <div className="flex items-center gap-1 border border-panelBorder rounded-[2px] bg-obsidian px-1.5 py-0.5 font-mono text-[11px]">
+          <div className="flex items-center gap-1 border border-panelBorder rounded-[2px] bg-obsidian px-1.5 py-0.5 font-mono text-[11px] shrink-0">
             <button
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage <= 1}
@@ -151,7 +154,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
           </div>
 
           {/* Zoom */}
-          <div className="flex items-center gap-1 border border-panelBorder rounded-[2px] bg-obsidian px-2 py-0.5 text-[11px] font-mono text-zinc-400">
+          <div className="flex items-center gap-1 border border-panelBorder rounded-[2px] bg-obsidian px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 shrink-0">
             <button
               onClick={() => onZoomChange(-10)}
               aria-label="Zoom out"
@@ -172,13 +175,13 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
           {/* BBox Aç/Bağla Keçidi */}
           <button
             onClick={onToggleAllBboxes}
-            className={`px-2 py-0.5 border border-panelBorder rounded-[2px] flex items-center gap-1.5 transition font-sans text-[11px] ${
+            className={`px-2 py-0.5 border border-panelBorder rounded-[2px] flex items-center gap-1.5 transition font-sans text-[11px] shrink-0 whitespace-nowrap ${
               showAllBboxes
                 ? 'bg-panelElevated text-textPrimary border-zinc-500'
                 : 'bg-obsidian text-zinc-400 hover:text-textPrimary'
             }`}
           >
-            <BoxSelect className="w-3 h-3 text-zinc-400" />
+            <BoxSelect className="w-3 h-3 text-zinc-400 shrink-0" />
             <span>Show all bounding boxes</span>
           </button>
         </div>
@@ -343,13 +346,15 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
           ) : (
             <>
               {/* Live Uploaded / Real PDF Spatial Chunks View */}
-              <div className="border-b border-zinc-300 pb-3 mb-6 font-mono text-[10px] text-zinc-500 uppercase tracking-wider flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span>{documentName}</span>
-                  <span>•</span>
-                  <span>XY-CUT {detectedCols}-COLUMN LAYOUT</span>
+              <div className="border-b border-zinc-300 pb-3 mb-6 font-mono text-[10px] text-zinc-500 uppercase tracking-wider flex justify-between items-center gap-3">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="truncate max-w-[260px]" title={documentName}>
+                    {documentName}
+                  </span>
+                  <span className="shrink-0">•</span>
+                  <span className="shrink-0">XY-CUT {detectedCols}-COLUMN LAYOUT</span>
                 </div>
-                <div className="text-zinc-600 font-mono">
+                <div className="text-zinc-600 font-mono shrink-0 whitespace-nowrap">
                   Page {currentPage} of {totalPages}
                 </div>
               </div>
