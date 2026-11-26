@@ -38,6 +38,43 @@ namespace Veritas.Core.Domain.Interfaces
         void InvalidateDocumentCache(Guid documentId);
     }
 
+    public class IngestionValidationResult
+    {
+        public bool IsValid { get; set; }
+        public string ErrorCode { get; set; } = string.Empty;
+        public string ErrorMessage { get; set; } = string.Empty;
+        public string Extension { get; set; } = string.Empty;
+        public bool HasOpenAction { get; set; }
+    }
+
+    public class BatchIngestionItemResult
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string Status { get; set; } = "indexed"; // indexed | duplicate | ocr_required | rejected
+        public bool IsDuplicate { get; set; }
+        public int ChunkCount { get; set; }
+        public int TotalPages { get; set; }
+        public string? ErrorCode { get; set; }
+        public string? ErrorMessage { get; set; }
+        public Document? Document { get; set; }
+    }
+
+    public class BatchIngestionResponse
+    {
+        public int TotalFiles { get; set; }
+        public int IndexedCount { get; set; }
+        public int DuplicateCount { get; set; }
+        public int OcrRequiredCount { get; set; }
+        public int RejectedCount { get; set; }
+        public List<BatchIngestionItemResult> Results { get; set; } = new();
+    }
+
+    public interface IIngestionValidationService
+    {
+        IngestionValidationResult ValidateUpload(string fileName, long length, byte[] headerAndSampleBytes);
+        string SanitizeExtractedText(string rawText);
+    }
+
     public class SearchCandidate
     {
         public DocumentChunk Chunk { get; set; } = new DocumentChunk();

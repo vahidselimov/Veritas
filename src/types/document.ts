@@ -50,3 +50,37 @@ export interface DocumentSummaryDto {
   totalCharacters: number;
   createdAt: string;
 }
+
+export interface UploadedDocumentDto {
+  id: string;
+  name: string;
+  filePath: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  totalPages: number;
+  checksum: string;
+  status: string;
+  metadataJson?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BatchIngestionItemResult {
+  fileName: string;
+  status: 'indexed' | 'duplicate' | 'ocr_required' | 'rejected';
+  isDuplicate: boolean;
+  chunkCount: number;
+  totalPages: number;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  document?: UploadedDocumentDto | null;
+}
+
+export interface BatchIngestionResponse {
+  totalFiles: number;
+  indexedCount: number;
+  duplicateCount: number;
+  ocrRequiredCount: number;
+  rejectedCount: number;
+  results: BatchIngestionItemResult[];
+}

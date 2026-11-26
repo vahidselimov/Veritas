@@ -93,4 +93,40 @@ test.describe('VERITAS // CORPUS — Swiss Grid Research Workspace E2E', () => {
     await expect(page.getByText(/CACHE: (HIT|MISS)/)).toBeVisible();
     await expect(page.getByText(/CHARS: 0\.\./)).toBeVisible();
   });
+
+  test('should validate multi-document batch ingestion, SHA-256 deduplication, and invalid PDF rejection', async ({ page }) => {
+    await page.goto('/');
+
+    const uniqueToken = `e2e-batch-${Date.now()}`;
+    const validMd = Buffer.from(`# Batch Test\n\nDeterministic verification content ${uniqueToken} with enough text for indexing.`, 'utf8');
+    const fakePdf = Buffer.from('NOT A REAL PDF BINARY HEADER', 'utf8');
+
+    const batchResPromise = page.waitForResponse(
+      (res) => res.url().includes('/api/v1/documents/upload-batch') && res.request().method() === 'POST'
+    );
+
+    const fileInput = page.getByRole('complementary').locator('input[type="file"]');
+    await fileInput.setInputFiles([
+      { name: `${uniqueToken}-a.md`, mimeType: 'text/markdown', buffer: validMd },
+      { name: `${uniqueToken}-dup.md`, mimeType: 'text/markdown', buffer: validMd },
+      { name: `${uniqueToken}-invalid.pdf`, mimeType: 'application/pdf', buffer: fakePdf },
+    ]);
+
+    const batchRes = await batchResPromise;
+    expect(batchRes.status()).toBe(200);
+    const body = await batchRes.json();
+
+    expect(body.totalFiles).toBe(3);
+    expect(body.indexedCount).toBe(1);
+    expect(body.duplicateCount).toBe(1);
+    expect(body.rejectedCount).toBe(1);
+
+    await expect(page.getByText(/BATCH \(3\): 1 new • 1 dup • 1 err/)).toBeVisible();
+
+    // Clean up uploaded E2E test document so corpus stays clean
+    const createdId = body.results?.[0]?.document?.id;
+    if (createdId) {
+      await page.request.delete(`/api/v1/documents/${createdId}`);
+    }
+  });
 });

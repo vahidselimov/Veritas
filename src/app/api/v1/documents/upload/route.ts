@@ -1,14 +1,5 @@
-import crypto from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  extractPdfWithNodeParser,
-  extractPlainTextChunks,
-} from '@/lib/node-pdf-parser';
-import {
-  saveCloudUploadedFile,
-  upsertCloudDocument,
-  type StoredCloudDocument,
-} from '@/lib/cloud-store';
+import { ingestSingleFileInCloud } from '@/lib/cloud-ingestion';
 
 const CORE_API_URL = process.env.CORE_API_URL || 'http://localhost:5000';
 
@@ -18,31 +9,23 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!file || file.size === 0) {
-      return NextResponse.json({ error: 'No file uploaded or file is empty.' }, { status: 400 });
-    }
-
-    const lowerName = file.name.toLowerCase();
-    const isPdf = lowerName.endsWith('.pdf');
-    const isText = lowerName.endsWith('.md') || lowerName.endsWith('.txt');
-    if (!isPdf && !isText) {
       return NextResponse.json(
-        { error: 'Only .pdf, .md, and .txt files are supported.' },
+        { error: 'No file uploaded or file is empty.', code: 'EMPTY_FILE' },
         { status: 400 }
       );
     }
 
-    const arrayBuf = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuf);
+    const buffer = Buffer.from(await file.arrayBuffer());
 
     // 1. Forward to C# .NET 9 Core API when online
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const fwdFormData = new FormData();
       fwdFormData.append(
         'file',
-        new Blob([buffer], { type: file.type || (isPdf ? 'application/pdf' : 'text/plain') }),
+        new Blob([buffer], { type: file.type || 'application/octet-stream' }),
         file.name
       );
 
@@ -53,52 +36,35 @@ export async function POST(req: NextRequest) {
       });
       clearTimeout(timeoutId);
 
-      if (res.ok) {
+      // Propagate both 2xx successes and explicit 400 validation rejections
+      if (res.status < 500) {
         const data = await res.json();
-        return NextResponse.json(data);
+        return NextResponse.json(data, {
+          status: res.status,
+          headers: {
+            'X-Veritas-Duplicate': res.headers.get('X-Veritas-Duplicate') || 'false',
+          },
+        });
       }
     } catch {
-      // .NET 9 Core is in standby (e.g., ocaq.dev cloud deploy) -> use Node.js pdfjs-dist parser
+      // .NET 9 Core unreachable (e.g., ocaq.dev cloud deploy) -> fall back to Node ingestion engine
     }
 
-    // 2. Cloud Parity Mode: Parse real PDF / text with XY-Cut + Char Offsets in Node.js
-    const docId = crypto.randomUUID();
-    const checksum = crypto.createHash('sha256').update(buffer).digest('hex');
-    const savedPath = saveCloudUploadedFile(docId, file.name, buffer);
-
-    let totalPages = 1;
-    let chunks = [];
-
-    if (isPdf) {
-      const parsed = await extractPdfWithNodeParser(buffer, docId);
-      totalPages = parsed.totalPages;
-      chunks = parsed.chunks;
-    } else {
-      chunks = extractPlainTextChunks(buffer.toString('utf8'), docId);
-      totalPages = chunks.length > 0 ? Math.max(...chunks.map((c) => c.pageNumber)) : 1;
+    // 2. Cloud Parity Mode: Validate, deduplicate & parse in Node.js
+    const rebuiltFile = new File([buffer], file.name, { type: file.type });
+    const result = await ingestSingleFileInCloud(rebuiltFile, new Map());
+    if (result.status === 'rejected' || !result.document) {
+      return NextResponse.json(
+        { error: result.errorMessage || 'Upload validation failed.', code: result.errorCode },
+        { status: 400 }
+      );
     }
 
-    const now = new Date().toISOString();
-    const doc: StoredCloudDocument = {
-      id: docId,
-      name: file.name,
-      filePath: savedPath,
-      mimeType: file.type || (isPdf ? 'application/pdf' : 'text/plain'),
-      fileSizeBytes: file.size,
-      totalPages,
-      checksum,
-      status: 'indexed',
-      metadataJson: JSON.stringify({
-        mode: 'cloud-node-pdfjs-xycut',
-        uploadedAt: now,
-        chunkCount: chunks.length,
-      }),
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    upsertCloudDocument(doc, chunks);
-    return NextResponse.json(doc);
+    return NextResponse.json(result.document, {
+      headers: {
+        'X-Veritas-Duplicate': result.isDuplicate ? 'true' : 'false',
+      },
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Upload failed';
     return NextResponse.json({ error: message }, { status: 500 });

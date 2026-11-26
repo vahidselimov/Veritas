@@ -450,7 +450,7 @@ namespace Veritas.Core.Infrastructure.Services
             int chunkCharEnd = globalCharCursor;
             globalCharCursor += 1; // inter-chunk space separator
 
-            string content = string.Join(" ", textParts);
+            string content = SanitizeText(string.Join(" ", textParts));
             double minPdfX = lines.Min(l => l.Left);
             double maxPdfX = lines.Max(l => l.Right);
             double minPdfY = lines.Min(l => l.Bottom);
@@ -510,6 +510,20 @@ namespace Veritas.Core.Infrastructure.Services
             return sorted.Count % 2 == 0
                 ? (sorted[mid - 1] + sorted[mid]) / 2.0
                 : sorted[mid];
+        }
+
+        private static string SanitizeText(string raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return string.Empty;
+            var chars = new char[raw.Length];
+            int idx = 0;
+            foreach (char c in raw)
+            {
+                if (c == '\0') continue;
+                if (c < ' ' && c != '\t' && c != '\n' && c != '\r') continue;
+                chars[idx++] = c;
+            }
+            return new string(chars, 0, idx);
         }
 
         private static double Clamp(double val, double min, double max) =>

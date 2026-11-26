@@ -255,6 +255,39 @@ export function getCloudDocument(id: string): StoredCloudDocument | null {
   return getStore().documents.find((d) => d.id === id) || null;
 }
 
+export function deleteCloudDocument(id: string): boolean {
+  const state = getStore();
+  const target = state.documents.find((d) => d.id === id);
+  if (!target) return false;
+
+  state.documents = state.documents.filter((d) => d.id !== id);
+  delete state.chunksByDoc[id];
+  Object.keys(state.coordCache)
+    .filter((k) => k.startsWith(`${id}:`))
+    .forEach((k) => delete state.coordCache[k]);
+
+  if (target.filePath && fs.existsSync(target.filePath) && target.filePath.startsWith(UPLOAD_DIR)) {
+    try {
+      fs.unlinkSync(target.filePath);
+    } catch {
+      // ignore cleanup error
+    }
+  }
+
+  persistStore(state);
+  return true;
+}
+
+export function findCloudDocumentByChecksum(
+  checksum: string
+): { doc: StoredCloudDocument; chunkCount: number } | null {
+  const state = getStore();
+  const doc = state.documents.find((d) => d.checksum === checksum);
+  if (!doc) return null;
+  const chunkCount = (state.chunksByDoc[doc.id] || []).length;
+  return { doc, chunkCount };
+}
+
 export function getCloudDocumentSummaries(): DocumentSummaryDto[] {
   const state = getStore();
   return state.documents.map((d) => {

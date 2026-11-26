@@ -11,7 +11,12 @@ import {
   ExternalLink,
   X,
 } from 'lucide-react';
-import type { CoordinateCacheDto, DocumentSummaryDto } from '@/types/document';
+import type {
+  BatchIngestionResponse,
+  CoordinateCacheDto,
+  DocumentSummaryDto,
+} from '@/types/document';
+import { uploadDocumentsBatch } from '@/lib/batch-upload-client';
 
 interface CorpusViewProps {
   onInspectInWorkspace?: (docId: string, pageNumber?: number) => void;
@@ -25,6 +30,7 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
   const [isInspecting, setIsInspecting] = useState(false);
   const [isReparsing, setIsReparsing] = useState<string | null>(null);
   const [isIngesting, setIsIngesting] = useState(false);
+  const [batchSummary, setBatchSummary] = useState<BatchIngestionResponse | null>(null);
 
   const loadSummaries = async () => {
     try {
@@ -41,20 +47,18 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
   };
 
   const handleCorpusUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    if (!e.target.files || e.target.files.length === 0) return;
     setIsIngesting(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v1/documents/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      if (res.ok) {
-        const uploaded = await res.json();
-        await loadSummaries();
-        await handleInspectCoordinates({ id: uploaded.id, name: uploaded.name });
+      const report = await uploadDocumentsBatch(e.target.files);
+      setBatchSummary(report);
+      await loadSummaries();
+      const ready = report.results.find((r) => r.document);
+      if (ready?.document) {
+        await handleInspectCoordinates({
+          id: ready.document.id,
+          name: ready.document.name,
+        });
       }
     } finally {
       setIsIngesting(false);
@@ -201,9 +205,10 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
 
           <label className="px-3 py-1 bg-accent text-obsidian font-mono font-bold text-xs rounded-[2px] hover:brightness-105 transition flex items-center gap-1.5 cursor-pointer">
             <Plus className="w-3.5 h-3.5" />
-            <span>{isIngesting ? 'PARSING...' : 'INGEST DOCUMENT'}</span>
+            <span>{isIngesting ? 'BATCH PARSING...' : 'INGEST DOCUMENT'}</span>
             <input
               type="file"
+              multiple
               accept=".pdf,.md,.txt"
               onChange={handleCorpusUpload}
               disabled={isIngesting}
@@ -215,6 +220,52 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
 
       {/* Sənədlər Cədvəli + Coordinate Inspector */}
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        {batchSummary && (
+          <div className="border border-panelBorder bg-panel rounded-[2px] p-3 font-mono text-xs space-y-2">
+            <div className="flex items-center justify-between border-b border-panelBorder pb-2">
+              <div className="flex items-center gap-3">
+                <span className="text-accent font-bold">BATCH INGESTION VALIDATION REPORT</span>
+                <span className="text-zinc-400">
+                  TOTAL: {batchSummary.totalFiles} • INDEXED: {batchSummary.indexedCount} • DUP:{' '}
+                  {batchSummary.duplicateCount} • OCR: {batchSummary.ocrRequiredCount} • REJECTED:{' '}
+                  {batchSummary.rejectedCount}
+                </span>
+              </div>
+              <button
+                onClick={() => setBatchSummary(null)}
+                className="text-zinc-500 hover:text-textPrimary"
+                aria-label="Close batch summary"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="space-y-1">
+              {batchSummary.results.map((item, idx) => (
+                <div key={`${item.fileName}-${idx}`} className="flex items-center justify-between text-[11px]">
+                  <span className="text-zinc-200">{item.fileName}</span>
+                  <div className="flex items-center gap-3">
+                    {item.errorMessage && (
+                      <span className="text-red-400 text-[10px]">
+                        [{item.errorCode}] {item.errorMessage}
+                      </span>
+                    )}
+                    <span
+                      className={`font-semibold ${
+                        item.status === 'indexed'
+                          ? 'text-status-pass'
+                          : item.status === 'duplicate' || item.status === 'ocr_required'
+                          ? 'text-amber-400'
+                          : 'text-red-400'
+                      }`}
+                    >
+                      {item.status.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="border border-panelBorder bg-panel rounded-[2px] overflow-hidden">
           <table className="w-full text-left font-mono text-xs">
             <thead className="bg-obsidian border-b border-panelBorder text-textMuted text-[11px]">
@@ -260,6 +311,8 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
                       className={`font-semibold flex items-center gap-1 ${
                         doc.status.toLowerCase() === 'indexed'
                           ? 'text-status-pass'
+                          : doc.status.toLowerCase() === 'ocr_required'
+                          ? 'text-amber-400'
                           : 'text-zinc-400'
                       }`}
                     >
@@ -267,7 +320,11 @@ export const CorpusView: React.FC<CorpusViewProps> = ({ onInspectInWorkspace }) 
                         <CheckCircle2 className="w-3 h-3 text-status-pass" />
                       )}
                       <span>
-                        {doc.status.toLowerCase() === 'indexed' ? 'Indexed' : doc.status}
+                        {doc.status.toLowerCase() === 'indexed'
+                          ? 'Indexed'
+                          : doc.status.toLowerCase() === 'ocr_required'
+                          ? 'OCR Needed'
+                          : doc.status}
                       </span>
                     </span>
                   </td>

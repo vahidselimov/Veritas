@@ -32,19 +32,25 @@ export interface LineBoundingBox extends BoundingBox {
 }
 
 // 1. Documents Table
-export const documents = pgTable('documents', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  filePath: text('file_path').notNull(),
-  mimeType: text('mime_type').notNull().default('application/pdf'),
-  fileSizeBytes: bigint('file_size_bytes', { mode: 'number' }).notNull(),
-  totalPages: integer('total_pages').notNull().default(1),
-  checksum: text('checksum').notNull(),
-  status: text('status').notNull().default('indexed'), // 'uploading' | 'processing' | 'indexed' | 'failed'
-  metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    name: text('name').notNull(),
+    filePath: text('file_path').notNull(),
+    mimeType: text('mime_type').notNull().default('application/pdf'),
+    fileSizeBytes: bigint('file_size_bytes', { mode: 'number' }).notNull(),
+    totalPages: integer('total_pages').notNull().default(1),
+    checksum: text('checksum').notNull(),
+    status: text('status').notNull().default('indexed'), // 'uploading' | 'processing' | 'indexed' | 'ocr_required' | 'failed'
+    metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    checksumIdx: index('idx_documents_checksum').on(table.checksum),
+  })
+);
 
 // 2. Document Chunks Table (Grounded Bounding Boxes + Offsets + XY-Cut + Vector + BM25)
 export const documentChunks = pgTable(

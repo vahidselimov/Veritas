@@ -4,7 +4,9 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -21,20 +23,26 @@ namespace Veritas.Core.Api.Controllers
     [Route("api/v1/[controller]")]
     public class DocumentsController : ControllerBase
     {
+        private const int MaxBatchFiles = 25;
+        private const int MinTextCharsBeforeOcrFallback = 50;
+
         private readonly VeritasDbContext _context;
         private readonly IPdfCoordinateExtractor _coordinateExtractor;
         private readonly ICoordinateCacheService _coordinateCache;
+        private readonly IIngestionValidationService _validator;
         private readonly IWebHostEnvironment _env;
 
         public DocumentsController(
             VeritasDbContext context,
             IPdfCoordinateExtractor coordinateExtractor,
             ICoordinateCacheService coordinateCache,
+            IIngestionValidationService validator,
             IWebHostEnvironment env)
         {
             _context = context;
             _coordinateExtractor = coordinateExtractor;
             _coordinateCache = coordinateCache;
+            _validator = validator;
             _env = env;
         }
 
@@ -93,6 +101,28 @@ namespace Veritas.Core.Api.Controllers
             var doc = await _context.Documents.FindAsync(id);
             if (doc == null) return NotFound();
             return doc;
+        }
+
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteDocument(Guid id)
+        {
+            var doc = await _context.Documents.FindAsync(id);
+            if (doc == null) return NotFound();
+
+            var resolvedPath = Path.IsPathRooted(doc.FilePath)
+                ? doc.FilePath
+                : Path.Combine(_env.ContentRootPath, doc.FilePath.Replace("/", Path.DirectorySeparatorChar.ToString()));
+
+            _context.Documents.Remove(doc);
+            await _context.SaveChangesAsync();
+            _coordinateCache.InvalidateDocumentCache(id);
+
+            if (System.IO.File.Exists(resolvedPath))
+            {
+                System.IO.File.Delete(resolvedPath);
+            }
+
+            return Ok(new { deleted = true, id });
         }
 
         [HttpGet("{id}/chunks")]
@@ -161,13 +191,140 @@ namespace Veritas.Core.Api.Controllers
         {
             if (file == null || file.Length == 0)
             {
-                return BadRequest(new { error = "No file uploaded or file is empty." });
+                return BadRequest(new { error = "No file uploaded or file is empty.", code = "EMPTY_FILE" });
             }
 
-            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (extension != ".pdf" && extension != ".md" && extension != ".txt")
+            var result = await IngestSingleFileAsync(file, new Dictionary<string, Document>(), HttpContext.RequestAborted);
+            if (result.Status == "rejected" || result.Document == null)
             {
-                return BadRequest(new { error = "Only .pdf, .md, and .txt files are supported." });
+                return BadRequest(new { error = result.ErrorMessage ?? "Upload validation failed.", code = result.ErrorCode });
+            }
+
+            if (result.IsDuplicate)
+            {
+                Response.Headers["X-Veritas-Duplicate"] = "true";
+                return Ok(result.Document);
+            }
+
+            Response.Headers["X-Veritas-Duplicate"] = "false";
+            return CreatedAtAction(nameof(GetDocument), new { id = result.Document.Id }, result.Document);
+        }
+
+        [HttpPost("upload-batch")]
+        [RequestSizeLimit(262_144_000)] // 250 MB batch ceiling
+        public async Task<ActionResult<BatchIngestionResponse>> UploadBatch([FromForm] List<IFormFile> files)
+        {
+            if (files == null || files.Count == 0)
+            {
+                return BadRequest(new { error = "No files provided in batch.", code = "EMPTY_BATCH" });
+            }
+
+            if (files.Count > MaxBatchFiles)
+            {
+                return BadRequest(new
+                {
+                    error = $"Batch limit is {MaxBatchFiles} files per request.",
+                    code = "BATCH_LIMIT_EXCEEDED"
+                });
+            }
+
+            var response = new BatchIngestionResponse
+            {
+                TotalFiles = files.Count
+            };
+
+            var batchSeen = new Dictionary<string, Document>(StringComparer.Ordinal);
+            foreach (var file in files)
+            {
+                var item = await IngestSingleFileAsync(file, batchSeen, HttpContext.RequestAborted);
+                response.Results.Add(item);
+
+                switch (item.Status)
+                {
+                    case "indexed":
+                        response.IndexedCount++;
+                        break;
+                    case "duplicate":
+                        response.DuplicateCount++;
+                        break;
+                    case "ocr_required":
+                        response.OcrRequiredCount++;
+                        break;
+                    default:
+                        response.RejectedCount++;
+                        break;
+                }
+            }
+
+            return Ok(response);
+        }
+
+        private async Task<BatchIngestionItemResult> IngestSingleFileAsync(
+            IFormFile file,
+            Dictionary<string, Document> batchSeen,
+            CancellationToken ct)
+        {
+            var safeName = Path.GetFileName(file.FileName ?? "unnamed");
+
+            if (file.Length == 0)
+            {
+                return Rejected(safeName, "EMPTY_FILE", $"File '{safeName}' is empty (0 bytes).");
+            }
+
+            // Read into memory buffer (capped at 120 MB) to validate magic bytes & compute SHA-256 before disk write
+            if (file.Length > 125_829_120)
+            {
+                return Rejected(safeName, "FILE_TOO_LARGE", $"File '{safeName}' exceeds 120 MB maximum size.");
+            }
+
+            byte[] fileBytes;
+            await using (var ms = new MemoryStream((int)Math.Min(file.Length, 125_829_120)))
+            {
+                await file.CopyToAsync(ms, ct);
+                fileBytes = ms.ToArray();
+            }
+
+            // Scan header + up to 2 MB of raw payload for magic signature & blocked active PDF triggers
+            int scanSize = Math.Min(fileBytes.Length, 2 * 1024 * 1024);
+            var scanSlice = scanSize == fileBytes.Length ? fileBytes : fileBytes[..scanSize];
+            var validation = _validator.ValidateUpload(safeName, fileBytes.Length, scanSlice);
+
+            if (!validation.IsValid)
+            {
+                return Rejected(safeName, validation.ErrorCode, validation.ErrorMessage);
+            }
+
+            string checksum = Convert.ToHexString(SHA256.HashData(fileBytes)).ToLowerInvariant();
+
+            // Deduplicate against both current batch and persisted PostgreSQL documents
+            if (batchSeen.TryGetValue(checksum, out var seenDoc))
+            {
+                int seenChunks = await _context.DocumentChunks.CountAsync(c => c.DocumentId == seenDoc.Id, ct);
+                return new BatchIngestionItemResult
+                {
+                    FileName = safeName,
+                    Status = "duplicate",
+                    IsDuplicate = true,
+                    ChunkCount = seenChunks,
+                    TotalPages = seenDoc.TotalPages,
+                    Document = seenDoc
+                };
+            }
+
+            var existingDoc = await _context.Documents.FirstOrDefaultAsync(d => d.Checksum == checksum, ct);
+            if (existingDoc != null)
+            {
+                batchSeen[checksum] = existingDoc;
+                int existingChunks = await _context.DocumentChunks.CountAsync(c => c.DocumentId == existingDoc.Id, ct);
+                return new BatchIngestionItemResult
+                {
+                    FileName = safeName,
+                    Status = "duplicate",
+                    IsDuplicate = true,
+                    ChunkCount = existingChunks,
+                    TotalPages = existingDoc.TotalPages,
+                    Document = existingDoc
+                };
             }
 
             var uploadsDir = Path.Combine(_env.ContentRootPath, "uploads");
@@ -177,128 +334,180 @@ namespace Veritas.Core.Api.Controllers
             }
 
             var docId = Guid.NewGuid();
-            var safeFileName = $"{docId}_{Path.GetFileName(file.FileName)}";
-            var filePath = Path.Combine(uploadsDir, safeFileName);
-
-            string checksum;
-            using (var sha256 = SHA256.Create())
-            using (var stream = new FileStream(filePath, FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-                stream.Position = 0;
-                var hashBytes = await sha256.ComputeHashAsync(stream);
-                checksum = Convert.ToHexString(hashBytes).ToLowerInvariant();
-            }
+            var storedFileName = $"{docId}_{safeName}";
+            var filePath = Path.Combine(uploadsDir, storedFileName);
+            await System.IO.File.WriteAllBytesAsync(filePath, fileBytes, ct);
 
             int totalPages = 1;
-            if (extension == ".pdf")
+            var extractedChunks = new List<DocumentChunk>();
+            string docStatus = "indexed";
+
+            if (validation.Extension == ".pdf")
             {
                 try
                 {
-                    using var pdf = PdfDocument.Open(filePath);
-                    totalPages = Math.Max(1, pdf.NumberOfPages);
+                    using (var pdf = PdfDocument.Open(filePath))
+                    {
+                        totalPages = Math.Max(1, pdf.NumberOfPages);
+                    }
+
+                    extractedChunks = await _coordinateExtractor.ExtractChunksWithBBoxAsync(filePath, docId, ct);
+                    foreach (var chunk in extractedChunks)
+                    {
+                        chunk.Content = _validator.SanitizeExtractedText(chunk.Content);
+                    }
+
+                    int extractedCharTotal = extractedChunks.Sum(c => c.Content.Length);
+                    if (extractedCharTotal < MinTextCharsBeforeOcrFallback)
+                    {
+                        docStatus = "ocr_required";
+                        if (extractedChunks.Count == 0)
+                        {
+                            var ocrNotice = $"[OCR_REQUIRED] {safeName} appears to be a scanned/image PDF ({extractedCharTotal} extractable chars across {totalPages} pages). Queued for OCR fallback.";
+                            extractedChunks.Add(new DocumentChunk
+                            {
+                                Id = Guid.NewGuid(),
+                                DocumentId = docId,
+                                ChunkIndex = 0,
+                                ReadingOrder = 0,
+                                ColumnIndex = 0,
+                                CharStartIndex = 0,
+                                CharEndIndex = ocrNotice.Length,
+                                BlockType = "ocr_needed",
+                                PageNumber = 1,
+                                Content = ocrNotice,
+                                TokenCount = (int)Math.Ceiling(ocrNotice.Length / 4.0),
+                                Bbox = new BoundingBox(0.05, 0.08, 0.9, 0.12),
+                                LineBboxes = new List<LineBoundingBox>
+                                {
+                                    new LineBoundingBox(0.05, 0.08, 0.9, 0.12, 0, ocrNotice.Length)
+                                },
+                                CreatedAt = DateTime.UtcNow
+                            });
+                        }
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
-                    totalPages = 1;
+                    if (System.IO.File.Exists(filePath)) System.IO.File.Delete(filePath);
+                    return Rejected(safeName, "CORRUPT_PDF", $"Failed to parse PDF '{safeName}': {ex.Message}");
                 }
+            }
+            else
+            {
+                var rawText = _validator.SanitizeExtractedText(Encoding.UTF8.GetString(fileBytes));
+                extractedChunks = ChunkPlainText(rawText, docId);
+                totalPages = extractedChunks.Count > 0 ? extractedChunks.Max(c => c.PageNumber) : 1;
             }
 
             var doc = new Document
             {
                 Id = docId,
-                Name = Path.GetFileName(file.FileName),
-                FilePath = Path.Combine("uploads", safeFileName).Replace("\\", "/"),
-                MimeType = file.ContentType ?? (extension == ".pdf" ? "application/pdf" : "text/plain"),
-                FileSizeBytes = file.Length,
+                Name = safeName,
+                FilePath = Path.Combine("uploads", storedFileName).Replace("\\", "/"),
+                MimeType = file.ContentType ?? (validation.Extension == ".pdf" ? "application/pdf" : "text/plain"),
+                FileSizeBytes = fileBytes.Length,
                 TotalPages = totalPages,
                 Checksum = checksum,
-                Status = "indexed",
+                Status = docStatus,
                 MetadataJson = JsonSerializer.Serialize(new
                 {
-                    originalFileName = Path.GetFileName(file.FileName),
+                    originalFileName = safeName,
                     uploadedAt = DateTime.UtcNow.ToString("O"),
-                    parser = extension == ".pdf" ? "PdfPig-XYCut-v1" : "TextStream"
+                    parser = validation.Extension == ".pdf" ? "PdfPig-XYCut-v1" : "TextStream",
+                    hasOpenAction = validation.HasOpenAction,
+                    chunkCount = extractedChunks.Count,
+                    totalCharacters = extractedChunks.Count > 0 ? extractedChunks.Max(c => c.CharEndIndex) : 0
                 }),
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
-            await _context.Documents.AddAsync(doc);
-
-            var extractedChunks = new List<DocumentChunk>();
-
-            if (extension == ".pdf")
+            await _context.Documents.AddAsync(doc, ct);
+            if (extractedChunks.Count > 0)
             {
-                try
-                {
-                    extractedChunks = await _coordinateExtractor.ExtractChunksWithBBoxAsync(filePath, doc.Id, HttpContext.RequestAborted);
-                    if (extractedChunks.Count > 0)
-                    {
-                        await _context.DocumentChunks.AddRangeAsync(extractedChunks);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    var fallbackChunk = new DocumentChunk
-                    {
-                        Id = Guid.NewGuid(),
-                        DocumentId = doc.Id,
-                        ChunkIndex = 0,
-                        ReadingOrder = 0,
-                        ColumnIndex = 0,
-                        CharStartIndex = 0,
-                        CharEndIndex = 0,
-                        BlockType = "paragraph",
-                        PageNumber = 1,
-                        Content = $"Extracted content from {doc.Name} (Parsing notice: {ex.Message})",
-                        TokenCount = 20,
-                        Bbox = new BoundingBox(0.05, 0.05, 0.9, 0.9),
-                        LineBboxes = new List<LineBoundingBox>(),
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    fallbackChunk.CharEndIndex = fallbackChunk.Content.Length;
-                    extractedChunks.Add(fallbackChunk);
-                    await _context.DocumentChunks.AddAsync(fallbackChunk);
-                }
-            }
-            else
-            {
-                var textContent = await System.IO.File.ReadAllTextAsync(filePath);
-                var snippet = textContent.Length > 2000 ? textContent[..2000] : textContent;
-                var textChunk = new DocumentChunk
-                {
-                    Id = Guid.NewGuid(),
-                    DocumentId = doc.Id,
-                    ChunkIndex = 0,
-                    ReadingOrder = 0,
-                    ColumnIndex = 0,
-                    CharStartIndex = 0,
-                    CharEndIndex = snippet.Length,
-                    BlockType = "paragraph",
-                    PageNumber = 1,
-                    Content = snippet,
-                    TokenCount = (int)Math.Ceiling(textContent.Length / 4.0),
-                    Bbox = new BoundingBox(0.05, 0.05, 0.9, 0.9),
-                    LineBboxes = new List<LineBoundingBox>
-                    {
-                        new LineBoundingBox(0.05, 0.05, 0.9, 0.9, 0, snippet.Length)
-                    },
-                    CreatedAt = DateTime.UtcNow
-                };
-                extractedChunks.Add(textChunk);
-                await _context.DocumentChunks.AddAsync(textChunk);
+                await _context.DocumentChunks.AddRangeAsync(extractedChunks, ct);
             }
 
-            await _context.SaveChangesAsync();
+            await _context.SaveChangesAsync(ct);
 
-            // Warm IMemoryCache immediately so first page render hits cached coordinates
             if (extractedChunks.Count > 0)
             {
                 _coordinateCache.WarmDocumentCache(doc.Id, extractedChunks);
             }
 
-            return CreatedAtAction(nameof(GetDocument), new { id = doc.Id }, doc);
+            batchSeen[checksum] = doc;
+
+            return new BatchIngestionItemResult
+            {
+                FileName = safeName,
+                Status = docStatus,
+                IsDuplicate = false,
+                ChunkCount = extractedChunks.Count,
+                TotalPages = totalPages,
+                Document = doc
+            };
         }
+
+        private static List<DocumentChunk> ChunkPlainText(string rawText, Guid documentId)
+        {
+            var chunks = new List<DocumentChunk>();
+            var paragraphs = rawText
+                .Replace("\r\n", "\n")
+                .Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            int cursor = 0;
+            double yCursor = 0.06;
+
+            for (int i = 0; i < paragraphs.Length; i++)
+            {
+                var clean = string.Join(" ", paragraphs[i].Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+                if (clean.Length > 1200) clean = clean[..1200];
+                if (clean.Length == 0) continue;
+
+                int start = cursor;
+                int end = start + clean.Length;
+                cursor = end + 1;
+
+                double h = Math.Min(0.18, Math.Max(0.04, Math.Ceiling(clean.Length / 90.0) * 0.024));
+                double y = Math.Clamp(yCursor, 0.05, 0.85);
+                yCursor = y + h + 0.025 > 0.92 ? 0.06 : y + h + 0.025;
+                int pageNumber = (chunks.Count / 6) + 1;
+
+                var bbox = new BoundingBox(0.07, Math.Round(y, 4), 0.86, Math.Round(h, 4));
+                chunks.Add(new DocumentChunk
+                {
+                    Id = Guid.NewGuid(),
+                    DocumentId = documentId,
+                    ChunkIndex = chunks.Count,
+                    ReadingOrder = chunks.Count,
+                    ColumnIndex = 0,
+                    CharStartIndex = start,
+                    CharEndIndex = end,
+                    BlockType = clean.Length < 70 && !clean.EndsWith('.') ? "heading" : "paragraph",
+                    PageNumber = pageNumber,
+                    Content = clean,
+                    TokenCount = (int)Math.Ceiling(clean.Length / 4.0),
+                    Bbox = bbox,
+                    LineBboxes = new List<LineBoundingBox>
+                    {
+                        new LineBoundingBox(bbox.X, bbox.Y, bbox.W, bbox.H, start, end)
+                    },
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+
+            return chunks;
+        }
+
+        private static BatchIngestionItemResult Rejected(string fileName, string code, string message) =>
+            new()
+            {
+                FileName = fileName,
+                Status = "rejected",
+                IsDuplicate = false,
+                ErrorCode = code,
+                ErrorMessage = message
+            };
     }
 }

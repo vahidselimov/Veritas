@@ -35,6 +35,7 @@ namespace Veritas.Core.Infrastructure.Data
                 entity.Property(e => e.FileSizeBytes).HasColumnName("file_size_bytes").IsRequired();
                 entity.Property(e => e.TotalPages).HasColumnName("total_pages").HasDefaultValue(1);
                 entity.Property(e => e.Checksum).HasColumnName("checksum").IsRequired();
+                entity.HasIndex(e => e.Checksum).HasDatabaseName("idx_documents_checksum");
                 entity.Property(e => e.Status).HasColumnName("status").HasDefaultValue("indexed");
                 entity.Property(e => e.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb");
                 entity.Property(e => e.CreatedAt).HasColumnName("created_at");

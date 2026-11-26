@@ -12,8 +12,9 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<VeritasDbContext>(options =>
     options.UseNpgsql(connectionString, o => o.UseVector()));
 
-// Register memory cache & PDF spatial services
+// Register memory cache, validation & PDF spatial services
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<IIngestionValidationService, IngestionValidationService>();
 builder.Services.AddScoped<IPdfCoordinateExtractor, PdfSpatialParserService>();
 builder.Services.AddScoped<ICoordinateCacheService, CoordinateCacheService>();
 

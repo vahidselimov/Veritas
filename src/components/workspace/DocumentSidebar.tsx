@@ -9,14 +9,17 @@ import {
   FileSpreadsheet,
   SlidersHorizontal,
   ChevronDown,
+  X,
 } from 'lucide-react';
+import { uploadDocumentsBatch } from '@/lib/batch-upload-client';
+import type { BatchIngestionResponse, UploadedDocumentDto } from '@/types/document';
 
 export interface DocItem {
   id: string;
   name: string;
   size: string;
   pages: number;
-  status: 'indexed' | 'processing';
+  status: 'indexed' | 'processing' | 'ocr_required';
   progress?: number;
   icon: 'text' | 'code' | 'sheet';
 }
@@ -43,22 +46,30 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [batchReport, setBatchReport] = useState<BatchIngestionResponse | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const mapDocToItem = (d: UploadedDocumentDto): DocItem => ({
+    id: d.id,
+    name: d.name,
+    size: `${(d.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
+    pages: d.totalPages || 1,
+    status:
+      d.status === 'indexed'
+        ? 'indexed'
+        : d.status === 'ocr_required'
+        ? 'ocr_required'
+        : 'processing',
+    icon: d.name.endsWith('.md') ? 'sheet' : 'text',
+  });
 
   const fetchLiveDocs = async () => {
     try {
       const res = await fetch('/api/v1/documents', { cache: 'no-store' });
       if (res.ok) {
-        const data = await res.json();
+        const data: UploadedDocumentDto[] = await res.json();
         if (Array.isArray(data) && data.length > 0) {
-          const mapped: DocItem[] = data.map((d: any) => ({
-            id: d.id,
-            name: d.name,
-            size: `${(d.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
-            pages: d.totalPages || 1,
-            status: d.status === 'indexed' ? 'indexed' : 'processing',
-            icon: d.name.endsWith('.md') ? 'sheet' : 'text',
-          }));
-          setLiveDocs(mapped);
+          setLiveDocs(data.map(mapDocToItem));
         }
       }
     } catch {
@@ -70,39 +81,32 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
     fetchLiveDocs();
   }, []);
 
-  const uploadFile = async (file: File) => {
+  const processBatchFiles = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
     setIsUploading(true);
-    setUploadProgress(`Uploading ${file.name}...`);
+    setUploadError(null);
+    setUploadProgress(
+      fileArray.length === 1
+        ? `Validating ${fileArray[0].name}...`
+        : `Batch validating ${fileArray.length} files...`
+    );
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
+      const report = await uploadDocumentsBatch(fileArray);
+      setBatchReport(report);
 
-      const res = await fetch('/api/v1/documents/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      await fetchLiveDocs();
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'Upload failed');
+      const firstReady = report.results.find((r) => r.document);
+      if (firstReady?.document) {
+        onSelectDoc(firstReady.document.id);
       }
-
-      const newDoc = await res.json();
-      const mapped: DocItem = {
-        id: newDoc.id,
-        name: newDoc.name,
-        size: `${(newDoc.fileSizeBytes / (1024 * 1024)).toFixed(1)} MB`,
-        pages: newDoc.totalPages || 1,
-        status: 'indexed',
-        icon: newDoc.name.endsWith('.md') ? 'sheet' : 'text',
-      };
-
-      setLiveDocs((prev) => [mapped, ...prev.filter((d) => d.id !== mapped.id)]);
-      onSelectDoc(newDoc.id);
       setUploadProgress(null);
-    } catch (err: any) {
-      alert(`Upload error: ${err.message}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Batch upload error';
+      setUploadError(msg);
       setUploadProgress(null);
     } finally {
       setIsUploading(false);
@@ -110,9 +114,8 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    await uploadFile(file);
+    if (!e.target.files || e.target.files.length === 0) return;
+    await processBatchFiles(e.target.files);
     e.target.value = '';
   };
 
@@ -120,9 +123,8 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
     e.preventDefault();
     setIsDragging(false);
     if (isUploading) return;
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      await uploadFile(file);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      await processBatchFiles(e.dataTransfer.files);
     }
   };
 
@@ -190,21 +192,77 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
             isDragging ? 'border-accent bg-panelHover' : 'border-panelBorder hover:border-zinc-500 bg-obsidian/70 hover:bg-panelHover'
           } p-3 rounded-[2px] flex flex-col items-center justify-center text-center cursor-pointer transition group`}
         >
-          <Upload className={`w-4 h-4 ${isUploading ? 'text-accent animate-pulse' : 'text-zinc-500 group-hover:text-textPrimary'} mb-1 transition`} />
+          <Upload className={`w-4 h-4 ${isUploading ? 'text-accent' : 'text-zinc-500 group-hover:text-textPrimary'} mb-1 transition`} />
           <span className="text-xs font-sans text-textPrimary font-medium">
-            {isUploading ? (uploadProgress || 'Extracting coordinates...') : 'Upload Document'}
+            {isUploading ? (uploadProgress || 'Extracting coordinates...') : 'Upload Documents'}
           </span>
           <span className="text-[10px] text-zinc-500 font-mono mt-0.5">
-            {isUploading ? 'PdfPig parsing bounding boxes...' : 'PDF, Markdown up to 120MB'}
+            {isUploading ? 'Validating & XY-Cut parsing...' : 'PDF, MD, TXT • Batch up to 25 files'}
           </span>
           <input
             type="file"
+            multiple
             accept=".pdf,.md,.txt"
             onChange={handleFileUpload}
             disabled={isUploading}
             className="hidden"
           />
         </label>
+
+        {uploadError && (
+          <div className="mt-2 p-2 bg-obsidian border border-red-500/50 rounded-[2px] text-[10px] font-mono text-red-400 flex items-start justify-between gap-1.5">
+            <span className="break-words">{uploadError}</span>
+            <button
+              type="button"
+              onClick={() => setUploadError(null)}
+              className="text-zinc-500 hover:text-textPrimary shrink-0"
+              aria-label="Dismiss error"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        )}
+
+        {batchReport && (
+          <div className="mt-2 p-2 bg-obsidian border border-panelBorder rounded-[2px] text-[10px] font-mono space-y-1">
+            <div className="flex items-center justify-between text-zinc-300 border-b border-panelBorder pb-1">
+              <span>
+                BATCH ({batchReport.totalFiles}): {batchReport.indexedCount} new •{' '}
+                {batchReport.duplicateCount} dup • {batchReport.rejectedCount} err
+              </span>
+              <button
+                type="button"
+                onClick={() => setBatchReport(null)}
+                className="text-zinc-500 hover:text-textPrimary"
+                aria-label="Close batch report"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="max-h-20 overflow-y-auto space-y-0.5">
+              {batchReport.results.map((item, idx) => (
+                <div
+                  key={`${item.fileName}-${idx}`}
+                  className="flex items-center justify-between gap-1 text-[9px]"
+                  title={item.errorMessage || item.status}
+                >
+                  <span className="truncate text-zinc-400">{item.fileName}</span>
+                  <span
+                    className={`shrink-0 font-semibold ${
+                      item.status === 'indexed'
+                        ? 'text-status-pass'
+                        : item.status === 'duplicate' || item.status === 'ocr_required'
+                        ? 'text-amber-400'
+                        : 'text-red-400'
+                    }`}
+                  >
+                    {item.status.toUpperCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Sənədlər Siyahısı */}
@@ -241,7 +299,11 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                 </span>
                 <span
                   className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    doc.status === 'indexed' ? 'bg-status-pass' : 'bg-zinc-400'
+                    doc.status === 'indexed'
+                      ? 'bg-status-pass'
+                      : doc.status === 'ocr_required'
+                      ? 'bg-amber-400'
+                      : 'bg-zinc-400'
                   }`}
                 />
               </div>
@@ -250,8 +312,20 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
                 <span>
                   {doc.size} • {doc.pages} pgs
                 </span>
-                <span className={doc.status === 'indexed' ? 'text-zinc-300' : 'text-zinc-400'}>
-                  {doc.status === 'indexed' ? 'Indexed' : `Processing (${doc.progress}%)`}
+                <span
+                  className={
+                    doc.status === 'indexed'
+                      ? 'text-zinc-300'
+                      : doc.status === 'ocr_required'
+                      ? 'text-amber-400'
+                      : 'text-zinc-400'
+                  }
+                >
+                  {doc.status === 'indexed'
+                    ? 'Indexed'
+                    : doc.status === 'ocr_required'
+                    ? 'OCR Needed'
+                    : `Processing (${doc.progress ?? 75}%)`}
                 </span>
               </div>
 
