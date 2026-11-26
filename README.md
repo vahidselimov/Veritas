@@ -7,7 +7,7 @@
 [![Framework](https://img.shields.io/badge/.NET-9.0%20(C%23%2013)-blue?style=flat-square)](https://dotnet.microsoft.com)
 [![Frontend](https://img.shields.io/badge/Next.js-14.2%20App%20Router-black?style=flat-square)](https://nextjs.org)
 [![Database](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-blueviolet?style=flat-square)](https://github.com/pgvector/pgvector)
-[![E2E Tests](https://img.shields.io/badge/Playwright-5%2F5%20Passing-success?style=flat-square)](https://playwright.dev)
+[![E2E Tests](https://img.shields.io/badge/Playwright-6%2F6%20Passing-success?style=flat-square)](https://playwright.dev)
 [![Architecture](https://img.shields.io/badge/UI%20Design-Swiss%20Grid%20Obsidian-orange?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
@@ -106,7 +106,8 @@ flowchart LR
 - **Single-Origin Gateway:** Zero CORS exposure during demonstrations or production rollouts.
 
 ### 5. Deterministic Sub-Pixel Coordinate Engine (PdfPig + XY-Cut)
-- Real-time PDF stream ingestion (`POST /api/v1/documents/upload`, up to 120MB, SHA-256 integrity checksum).
+- Real-time single & multi-document batch ingestion (`POST /api/v1/documents/upload` & `/upload-batch` up to 25 files / 120MB per file) with indexed **SHA-256 deduplication** (`idx_documents_checksum`).
+- **Binary & Security Validation (`IngestionValidationService`):** Verifies `%PDF-` magic-byte headers (`INVALID_PDF_HEADER`), blocks active PDF script triggers (`/JavaScript`, `/JS`, `/Launch`, `/SubmitForm`, `/ImportData` -> `SECURITY_ACTIVE_CONTENT_BLOCKED`), detects scanned/low-text PDFs (`< 50` chars -> `ocr_required`), and sanitizes control characters.
 - **Multi-Column XY-Cut Reading Order:** Recursively separates full-width headers from multi-column prose gutters without interleaving columns or shattering narrow table rows.
 - **Character Offset Mapping & Line BBoxes:** Computes exact monotonic `charStartIndex..charEndIndex` spans, sentence-boundary chunks, and line-level normalized `LineBoundingBox` arrays.
 - Converts 72 DPI bottom-left origin PDF coordinates into normalized DOM viewport coordinates $[0.0 .. 1.0]$:
@@ -170,7 +171,8 @@ Everything is routed through the single unified gateway:
 | :--- | :--- | :--- |
 | **Workspace UI** | [http://localhost:3000](http://localhost:3000) | 3-Pane Swiss Grid Deep Research Canvas |
 | **API Swagger UI** | [http://localhost:3000/swagger](http://localhost:3000/swagger) | Interactive OpenAPI / Swagger Documentation |
-| **Documents API** | [http://localhost:3000/api/v1/documents](http://localhost:3000/api/v1/documents) | Document collection & metadata |
+| **Documents API** | [http://localhost:3000/api/v1/documents](http://localhost:3000/api/v1/documents) | Document collection, lookup & deletion (`DELETE /{id}`) |
+| **Batch Ingestion API** | `POST /api/v1/documents/upload-batch` | Multi-file upload, SHA-256 dedup, security & OCR checks |
 | **Document Summary** | [http://localhost:3000/api/v1/documents/summary](http://localhost:3000/api/v1/documents/summary) | Corpus stats (chunks, XY-Cut columns, char spans) |
 | **Coordinates Cache API** | [http://localhost:3000/api/v1/documents/{id}/coordinates](http://localhost:3000/api/v1/documents/{id}/coordinates) | Cached normalized BBoxes, line BBoxes & char offsets |
 | **Chunks API** | [http://localhost:3000/api/v1/documents/{id}/chunks](http://localhost:3000/api/v1/documents/{id}/chunks) | Spatial bounding box chunks & text offsets |
@@ -209,12 +211,12 @@ veritas/
 │   ├── Veritas.slnx                      # Modern .NET 9 Solution File
 │   └── src/
 │       ├── Veritas.Core.Domain/          # Domain Entities, Interfaces & pgvector types
-│       ├── Veritas.Core.Infrastructure/  # EF Core 9, Npgsql, PdfPig XY-Cut & CoordinateCacheService
+│       ├── Veritas.Core.Infrastructure/  # EF Core 9, PdfPig XY-Cut, CoordinateCache & Validation Services
 │       └── Veritas.Core.Api/             # ASP.NET Core 9 Controllers, Swagger, Program.cs
 ├── src/                                  # Next.js 14 App Router Frontend
 │   ├── app/                              # Layout, Page, Route Handlers (/api/v1, /health)
 │   ├── components/workspace/             # Swiss Grid Components (AppChrome, Canvas, CorpusView, Sidebar)
-│   ├── lib/                              # Cloud Parity Engine (node-pdf-parser, cloud-store)
+│   ├── lib/                              # Cloud Parity & Batch Engines (node-pdf-parser, cloud-ingestion, cloud-store)
 │   ├── types/                            # Shared TypeScript Contracts (DocumentChunkDto, CoordinateCacheDto)
 │   └── db/                               # Drizzle ORM Schema & TypeScript Seeder
 ├── public/                               # Static Brand Assets (Stitch Brandmark & SVG Favicon)
@@ -235,7 +237,7 @@ veritas/
   - [x] Day 1: .NET 9 API, PostgreSQL pgvector, Next.js Swiss Grid UI, unified gateway.
   - [x] Day 2: Real PDF upload pipeline (`POST /api/v1/documents/upload`), `PdfPig` sub-pixel spatial parsing, normalized BBox coordinate engine, ocaq.dev cloud route handlers & fallback, Stitch brandmark & reticle favicon integration.
   - [x] Day 3: Character offset mapping (`charStartIndex`, `charEndIndex`), multi-column XY-Cut reading order, normalized coordinate caching (`IMemoryCache` + `Flow`/`Spatial BBox` canvas + `Corpus` Coordinate Inspector + Node `pdfjs-dist` cloud parity).
-  - [ ] Day 4: Multi-document ingestion batching & validation.
+  - [x] Day 4: Multi-document ingestion batching & validation (`POST /api/v1/documents/upload-batch`, SHA-256 deduplication, `%PDF-` magic-byte & active-script blocking, OCR density detection, `DELETE` endpoint, and multi-file Batch UI).
   - [ ] Day 5: Optical reticle zoom mechanics, responsive UI (Mobile/Tablet), & Week 1 milestone freeze.
 - [ ] **Week 2: Spatial Parsing & Bounding Box Normalization Engine**
 - [ ] **Week 3: Hybrid Retrieval & Reciprocal Rank Fusion (RRF)**
