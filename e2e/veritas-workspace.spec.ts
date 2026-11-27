@@ -206,9 +206,12 @@ test.describe('VERITAS // CORPUS — Swiss Grid Research Workspace E2E', () => {
     await expect(page.getByText('Zero-Copy Asynchronous Pinned Allocations')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-    // Slide-over Sources drawer opens & closes cleanly
+    // Slide-over Sources drawer opens & closes cleanly (280px drawer width, not full 768px)
     await page.getByTestId('tablet-sources-toggle').click();
     await expect(page.getByText('Indexed Documents')).toBeVisible();
+    const drawerBox = await page.getByRole('complementary').boundingBox();
+    expect(drawerBox?.width ?? 0).toBeGreaterThan(200);
+    expect(drawerBox?.width ?? 0).toBeLessThanOrEqual(300);
     await page.getByRole('button', { name: 'Close sources drawer' }).click();
   });
 });

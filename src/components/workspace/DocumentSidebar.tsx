@@ -172,7 +172,9 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
 
   return (
     <aside
-      className={`w-full xl:w-[260px] bg-panel border-r border-panelBorder flex flex-col shrink-0 select-none ${className}`}
+      className={`bg-panel border-r border-panelBorder flex flex-col shrink-0 select-none ${
+        className || 'w-full xl:w-[260px]'
+      }`}
     >
       {/* Başlıq */}
       <div className="h-10 border-b border-panelBorder px-3 flex items-center justify-between text-xs font-sans shrink-0">
