@@ -7,7 +7,7 @@
 [![Framework](https://img.shields.io/badge/.NET-9.0%20(C%23%2013)-blue?style=flat-square)](https://dotnet.microsoft.com)
 [![Frontend](https://img.shields.io/badge/Next.js-14.2%20App%20Router-black?style=flat-square)](https://nextjs.org)
 [![Database](https://img.shields.io/badge/PostgreSQL-16%20%2B%20pgvector-blueviolet?style=flat-square)](https://github.com/pgvector/pgvector)
-[![E2E Tests](https://img.shields.io/badge/Playwright-6%2F6%20Passing-success?style=flat-square)](https://playwright.dev)
+[![E2E Tests](https://img.shields.io/badge/Playwright-9%2F9%20Passing-success?style=flat-square)](https://playwright.dev)
 [![Architecture](https://img.shields.io/badge/UI%20Design-Swiss%20Grid%20Obsidian-orange?style=flat-square)]()
 [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
@@ -89,7 +89,8 @@ flowchart LR
 
 ### 1. Spatial Grounding & Optical Reticle Lock
 - Citations in the AI response (`[1]`, `[2]`, `[3]`) are interactive triggers.
-- Clicking a citation smoothly scrolls the PDF canvas (`#F8F7F4` paper) to the precise sentence and locks an amber optical reticle (`#F59E0B`) around its bounding box coordinates (`Y: 280.1, X: 48.0, W: 540`).
+- Clicking a citation smoothly scrolls the PDF canvas (`#F8F7F4` paper) to the precise sentence and locks a 4-corner Swiss amber optical reticle (`#F59E0B`) around its bounding box coordinates (`Y: 280.1, X: 48.0, W: 540`).
+- Supports `60%–200%` horizontal-safe optical zoom, clickable `100%` reset, `Ctrl/Meta + Scroll` and `Ctrl/Meta + +/-/0` shortcuts, plus responsive Mobile (`Sources | Chat | Paper`) and Tablet (`280px` slide-over drawer) layouts.
 
 ### 2. Hybrid Retrieval with Reciprocal Rank Fusion (RRF)
 - Combines semantic vector proximity with lexical keyword accuracy using reciprocal rank fusion:
@@ -233,12 +234,12 @@ veritas/
 
 ## 🗓️ 6-Week Roadmap
 
-- [ ] **Week 1: Foundational Ingestion & Dual-Engine Infrastructure**
+- [x] **Week 1: Foundational Ingestion & Dual-Engine Infrastructure**
   - [x] Day 1: .NET 9 API, PostgreSQL pgvector, Next.js Swiss Grid UI, unified gateway.
   - [x] Day 2: Real PDF upload pipeline (`POST /api/v1/documents/upload`), `PdfPig` sub-pixel spatial parsing, normalized BBox coordinate engine, ocaq.dev cloud route handlers & fallback, Stitch brandmark & reticle favicon integration.
   - [x] Day 3: Character offset mapping (`charStartIndex`, `charEndIndex`), multi-column XY-Cut reading order, normalized coordinate caching (`IMemoryCache` + `Flow`/`Spatial BBox` canvas + `Corpus` Coordinate Inspector + Node `pdfjs-dist` cloud parity).
   - [x] Day 4: Multi-document ingestion batching & validation (`POST /api/v1/documents/upload-batch`, SHA-256 deduplication, `%PDF-` magic-byte & active-script blocking, OCR density detection, `DELETE` endpoint, and multi-file Batch UI).
-  - [ ] Day 5: Optical reticle zoom mechanics, responsive UI (Mobile/Tablet), & Week 1 milestone freeze.
+  - [x] Day 5: Optical reticle zoom mechanics (`60%–200%`, clickable `100%` reset, `Ctrl+Scroll` / `Ctrl/Meta +/-/0`, 4-corner `#F59E0B` reticle lock), responsive Mobile (`Sources | Chat | Paper`) & Tablet (280px slide-over drawer) workspace, & Week 1 milestone freeze (`9/9` Playwright E2E passing).
 - [ ] **Week 2: Spatial Parsing & Bounding Box Normalization Engine**
 - [ ] **Week 3: Hybrid Retrieval & Reciprocal Rank Fusion (RRF)**
 - [ ] **Week 4: Grounded Synthesis & Interactive Streaming**
