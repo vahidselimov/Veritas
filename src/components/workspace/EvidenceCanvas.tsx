@@ -14,6 +14,7 @@ interface EvidenceCanvasProps {
   onToggleAllBboxes: () => void;
   zoomPercent: number;
   onZoomChange: (delta: number) => void;
+  onZoomReset?: () => void;
   pageChunks?: DocumentChunkDto[];
   cacheTelemetry?: {
     cacheHit: boolean;
@@ -22,7 +23,40 @@ interface EvidenceCanvasProps {
   } | null;
   selectedChunkId?: string | null;
   onSelectChunk?: (chunkId: string) => void;
+  className?: string;
 }
+
+const ReticleCorners: React.FC<{ active: boolean; inset?: boolean }> = ({
+  active,
+  inset = false,
+}) => {
+  if (!active) return null;
+  const posOffset = inset ? '1px' : '-2px';
+  return (
+    <span
+      data-testid="optical-reticle"
+      aria-hidden="true"
+      className="pointer-events-none absolute inset-0 z-30"
+    >
+      <span
+        style={{ top: posOffset, left: posOffset }}
+        className="absolute w-2.5 h-2.5 border-t-2 border-l-2 border-accent"
+      />
+      <span
+        style={{ top: posOffset, right: posOffset }}
+        className="absolute w-2.5 h-2.5 border-t-2 border-r-2 border-accent"
+      />
+      <span
+        style={{ bottom: posOffset, left: posOffset }}
+        className="absolute w-2.5 h-2.5 border-b-2 border-l-2 border-accent"
+      />
+      <span
+        style={{ bottom: posOffset, right: posOffset }}
+        className="absolute w-2.5 h-2.5 border-b-2 border-r-2 border-accent"
+      />
+    </span>
+  );
+};
 
 export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
   documentName,
@@ -34,33 +68,125 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
   onToggleAllBboxes,
   zoomPercent,
   onZoomChange,
+  onZoomReset,
   pageChunks = [],
   cacheTelemetry = null,
   selectedChunkId = null,
   onSelectChunk,
+  className = '',
 }) => {
+  const canvasScrollRef = useRef<HTMLDivElement>(null);
+  const articleRef = useRef<HTMLElement>(null);
   const target1Ref = useRef<HTMLDivElement>(null);
   const target2Ref = useRef<HTMLDivElement>(null);
   const target3Ref = useRef<HTMLDivElement>(null);
+  const selectedChunkRef = useRef<HTMLDivElement | null>(null);
+  const selectedSpatialRef = useRef<HTMLButtonElement | null>(null);
   const [canvasMode, setCanvasMode] = useState<'flow' | 'spatial'>('flow');
+  const [sheetDims, setSheetDims] = useState<{ baseWidth: number; height: number }>({
+    baseWidth: 0,
+    height: 0,
+  });
 
   const isSeededCudaView =
     documentName === 'cuda_kernel.pdf' && currentPage === 4;
 
-  // Sitat klikləndikdə həmin kordinata rəvan sürüşmə (smooth scroll)
-  useEffect(() => {
-    if (activeCitation === 1 && target1Ref.current) {
-      target1Ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else if (activeCitation === 2 && target2Ref.current) {
-      target2Ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else if (activeCitation === 3 && target3Ref.current) {
-      target3Ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  }, [activeCitation]);
-
   const sortedChunks = [...pageChunks].sort(
     (a, b) => a.readingOrder - b.readingOrder || a.chunkIndex - b.chunkIndex
   );
+
+  // Vərəqin baza ölçülərini izlə ki, zoom zamanı üfüqi kəsilmə olmasın
+  useEffect(() => {
+    const scrollEl = canvasScrollRef.current;
+    const articleEl = articleRef.current;
+    if (!scrollEl || !articleEl) return;
+
+    const updateDims = () => {
+      const horizontalPadding = scrollEl.clientWidth >= 640 ? 64 : 32;
+      const available = Math.max(
+        260,
+        Math.min(680, scrollEl.clientWidth - horizontalPadding)
+      );
+      const nextHeight = articleEl.offsetHeight;
+      setSheetDims((prev) =>
+        prev.baseWidth === available && prev.height === nextHeight
+          ? prev
+          : { baseWidth: available, height: nextHeight }
+      );
+    };
+
+    updateDims();
+    const observer = new ResizeObserver(updateDims);
+    observer.observe(scrollEl);
+    observer.observe(articleEl);
+    return () => observer.disconnect();
+  }, [currentPage, documentName, sortedChunks.length, canvasMode]);
+
+  // Ctrl + Scroll ilə optik yaxınlaşdırma (wheel passive=false)
+  useEffect(() => {
+    const scrollEl = canvasScrollRef.current;
+    if (!scrollEl) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        onZoomChange(e.deltaY < 0 ? 10 : -10);
+      }
+    };
+
+    scrollEl.addEventListener('wheel', handleWheel, { passive: false });
+    return () => scrollEl.removeEventListener('wheel', handleWheel);
+  }, [onZoomChange]);
+
+  // Sitat və ya zoom dəyişdikdə aktiv BBox reticle nişangahını mərkəzə sürüşdür
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      if (isSeededCudaView) {
+        const target =
+          activeCitation === 1
+            ? target1Ref.current
+            : activeCitation === 2
+            ? target2Ref.current
+            : activeCitation === 3
+            ? target3Ref.current
+            : null;
+        target?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'center',
+        });
+      } else if (selectedChunkId) {
+        const target =
+          canvasMode === 'spatial'
+            ? selectedSpatialRef.current
+            : selectedChunkRef.current;
+        target?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'center',
+        });
+      }
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeCitation, selectedChunkId, zoomPercent, canvasMode, isSeededCudaView]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.key === '=' || e.key === '+') {
+      e.preventDefault();
+      onZoomChange(10);
+    } else if (e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      onZoomChange(-10);
+    } else if (e.key === '0') {
+      e.preventDefault();
+      if (onZoomReset) {
+        onZoomReset();
+      } else {
+        onZoomChange(100 - zoomPercent);
+      }
+    }
+  };
 
   const detectedCols =
     cacheTelemetry?.columnCount ||
@@ -68,14 +194,22 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
       ? Math.max(...sortedChunks.map((c) => c.columnIndex)) + 1
       : 1);
 
+  const scale = zoomPercent / 100;
+  const useScaledWrapper = zoomPercent !== 100 && sheetDims.baseWidth > 0;
+
   return (
-    <section className="flex-1 min-w-0 bg-[#151518] flex flex-col overflow-hidden relative select-none">
+    <section
+      tabIndex={-1}
+      onKeyDown={handleKeyDown}
+      className={`flex-1 min-w-0 bg-[#151518] flex flex-col overflow-hidden relative select-none focus:outline-none ${className}`}
+    >
       {/* Evidence Canvas İdarəetmə Zolağı */}
-      <div className="h-10 border-b border-panelBorder bg-panel px-3 flex items-center justify-between gap-2 text-xs font-mono shrink-0 overflow-hidden">
-        <div className="flex items-center gap-1.5 text-xs font-sans min-w-0 flex-1">
+      <div className="min-h-10 border-b border-panelBorder bg-panel px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono shrink-0">
+        <div className="flex items-center gap-1.5 text-xs font-sans min-w-[120px] flex-1">
           <span className="text-zinc-500 shrink-0 hidden 2xl:inline">Document:</span>
           <span
-            className="font-medium text-textPrimary font-mono text-[11px] truncate"
+            data-testid="canvas-document-name"
+            className="font-medium text-textPrimary font-mono text-[11px] truncate max-w-[165px] sm:max-w-[240px]"
             title={documentName}
           >
             {documentName}
@@ -84,28 +218,42 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
             p. {String(currentPage).padStart(2, '0')}/{totalPages}
           </span>
           {cacheTelemetry && (
-            <span
-              className="hidden xl:inline-flex items-center gap-1 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono shrink-0 whitespace-nowrap"
-              title="Normalized Coordinate Cache Telemetry"
-            >
+            <>
               <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  cacheTelemetry.cacheHit ? 'bg-status-pass' : 'bg-accent'
-                }`}
-              />
-              <span>
-                {cacheTelemetry.cacheHit ? 'HIT' : 'MISS'} •{' '}
-                {cacheTelemetry.lookupMs.toFixed(2)}ms • {detectedCols}C
+                className="hidden 2xl:inline-flex items-center gap-1 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono shrink-0 whitespace-nowrap"
+                title="Normalized Coordinate Cache Telemetry"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    cacheTelemetry.cacheHit ? 'bg-status-pass' : 'bg-accent'
+                  }`}
+                />
+                <span>
+                  {cacheTelemetry.cacheHit ? 'HIT' : 'MISS'} •{' '}
+                  {cacheTelemetry.lookupMs.toFixed(2)}ms • {detectedCols}C
+                </span>
               </span>
-            </span>
+              <span
+                className="hidden sm:inline-flex 2xl:hidden items-center gap-1 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[10px] text-zinc-400 font-mono shrink-0 whitespace-nowrap"
+                title={`${cacheTelemetry.cacheHit ? 'HIT' : 'MISS'} • ${cacheTelemetry.lookupMs.toFixed(2)}ms • ${detectedCols}C`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    cacheTelemetry.cacheHit ? 'bg-status-pass' : 'bg-accent'
+                  }`}
+                />
+                <span>{cacheTelemetry.cacheHit ? 'HIT' : 'MISS'}</span>
+              </span>
+            </>
           )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs font-sans shrink-0 whitespace-nowrap">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs font-sans shrink-0 whitespace-nowrap">
           {/* Reading Flow vs Spatial 2D Plane */}
           {!isSeededCudaView && sortedChunks.length > 0 && (
             <div className="flex items-center border border-panelBorder rounded-[2px] bg-obsidian p-0.5 font-mono text-[10px] shrink-0">
               <button
+                type="button"
                 onClick={() => setCanvasMode('flow')}
                 className={`px-1.5 py-0.5 flex items-center gap-1 rounded-[1px] transition ${
                   canvasMode === 'flow'
@@ -117,6 +265,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                 <span>Flow</span>
               </button>
               <button
+                type="button"
                 onClick={() => setCanvasMode('spatial')}
                 className={`px-1.5 py-0.5 flex items-center gap-1 rounded-[1px] transition ${
                   canvasMode === 'spatial'
@@ -125,7 +274,8 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                 }`}
               >
                 <Layers className="w-3 h-3" />
-                <span>Spatial BBox</span>
+                <span className="hidden sm:inline">Spatial BBox</span>
+                <span className="sm:hidden">Spatial</span>
               </button>
             </div>
           )}
@@ -133,6 +283,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
           {/* Səhifələmə */}
           <div className="flex items-center gap-1 border border-panelBorder rounded-[2px] bg-obsidian px-1.5 py-0.5 font-mono text-[11px] shrink-0">
             <button
+              type="button"
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage <= 1}
               aria-label="Previous page"
@@ -144,6 +295,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
               p. {String(currentPage).padStart(2, '0')}
             </span>
             <button
+              type="button"
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage >= totalPages}
               aria-label="Next page"
@@ -153,20 +305,36 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
             </button>
           </div>
 
-          {/* Zoom */}
-          <div className="flex items-center gap-1 border border-panelBorder rounded-[2px] bg-obsidian px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 shrink-0">
+          {/* Optik Zoom İdarəetməsi (60% - 200%, Reset 100%) */}
+          <div className="flex items-center gap-0.5 border border-panelBorder rounded-[2px] bg-obsidian px-1 py-0.5 text-[11px] font-mono text-zinc-400 shrink-0">
             <button
+              type="button"
               onClick={() => onZoomChange(-10)}
+              disabled={zoomPercent <= 60}
               aria-label="Zoom out"
-              className="hover:text-textPrimary"
+              className="hover:text-textPrimary px-1 disabled:opacity-40"
             >
               -
             </button>
-            <span className="text-zinc-200 px-1">{zoomPercent}%</span>
             <button
+              type="button"
+              onClick={() => (onZoomReset ? onZoomReset() : onZoomChange(100 - zoomPercent))}
+              aria-label="Reset zoom"
+              title="Reset zoom to 100% (Ctrl+0)"
+              className={`px-1 min-w-[40px] text-center transition ${
+                zoomPercent !== 100
+                  ? 'text-accent hover:text-amber-300'
+                  : 'text-zinc-200 hover:text-textPrimary'
+              }`}
+            >
+              {zoomPercent}%
+            </button>
+            <button
+              type="button"
               onClick={() => onZoomChange(10)}
+              disabled={zoomPercent >= 200}
               aria-label="Zoom in"
-              className="hover:text-textPrimary"
+              className="hover:text-textPrimary px-1 disabled:opacity-40"
             >
               +
             </button>
@@ -174,7 +342,10 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
 
           {/* BBox Aç/Bağla Keçidi */}
           <button
+            type="button"
             onClick={onToggleAllBboxes}
+            aria-label="Show all bounding boxes"
+            title="Show all bounding boxes"
             className={`px-2 py-0.5 border border-panelBorder rounded-[2px] flex items-center gap-1.5 transition font-sans text-[11px] shrink-0 whitespace-nowrap ${
               showAllBboxes
                 ? 'bg-panelElevated text-textPrimary border-zinc-500'
@@ -182,17 +353,48 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
             }`}
           >
             <BoxSelect className="w-3 h-3 text-zinc-400 shrink-0" />
-            <span>Show all bounding boxes</span>
+            <span className="hidden 2xl:inline">Show all bounding boxes</span>
+            <span className="2xl:hidden">BBoxes</span>
           </button>
         </div>
       </div>
 
       {/* Kağız Vərəqinin Mərkəzləşdirilmiş Görünüşü (#F8F7F4) */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-8 flex justify-center items-start">
-        <article
-          style={{ transform: `scale(${zoomPercent / 100})`, transformOrigin: 'top center' }}
-          className="paper-sheet w-full max-w-[680px] text-zinc-900 rounded-[2px] p-10 md:p-12 font-editorial relative transition-transform duration-150"
+      <div
+        ref={canvasScrollRef}
+        className="flex-1 overflow-auto p-4 sm:p-6 md:p-8"
+      >
+        <div
+          style={
+            useScaledWrapper
+              ? {
+                  width: `${Math.round(sheetDims.baseWidth * scale)}px`,
+                  height:
+                    sheetDims.height > 0
+                      ? `${Math.round(sheetDims.height * scale)}px`
+                      : undefined,
+                }
+              : undefined
+          }
+          className={
+            useScaledWrapper
+              ? 'mx-auto relative shrink-0'
+              : 'w-full max-w-[680px] mx-auto'
+          }
         >
+          <article
+            ref={articleRef}
+            style={
+              useScaledWrapper
+                ? {
+                    width: `${sheetDims.baseWidth}px`,
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'top left',
+                  }
+                : { transform: 'scale(1)', transformOrigin: 'top center' }
+            }
+            className="paper-sheet w-full text-zinc-900 rounded-[2px] p-6 sm:p-10 md:p-12 font-editorial relative transition-transform duration-150"
+          >
           {isSeededCudaView ? (
             <>
               {/* Məqalə Meta Başlığı */}
@@ -251,13 +453,14 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                   ref={target1Ref}
                   className={`relative p-3 rounded-[1px] transition-all duration-150 ${
                     activeCitation === 1
-                      ? 'bg-accent/25 border-1.5 border-accent outline outline-2 outline-accent/60 animate-reticle-lock'
+                      ? 'bg-accent/20 border-[1.5px] border-accent outline outline-1 outline-accent/50 animate-reticle-lock'
                       : showAllBboxes
                       ? 'border border-zinc-300 bg-zinc-100/60'
                       : 'border border-transparent'
                   }`}
                 >
-                  <div className="absolute -left-14 top-1 text-[10px] font-mono text-zinc-600 bg-white border border-zinc-300 px-1 py-0.5 rounded-[1px] hidden md:block">
+                  <ReticleCorners active={activeCitation === 1} />
+                  <div className="inline-block md:absolute md:-left-14 md:top-1 mb-1 md:mb-0 text-[10px] font-mono text-zinc-600 bg-white border border-zinc-300 px-1 py-0.5 rounded-[1px]">
                     [Ref 1]
                   </div>
                   <div className="absolute right-2 -top-2.5 text-[9px] font-mono text-zinc-700 bg-white/95 px-1.5 py-0.5 rounded-[1px] border border-zinc-300">
@@ -278,13 +481,14 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                   ref={target2Ref}
                   className={`relative p-3 rounded-[1px] transition-all duration-150 ${
                     activeCitation === 2
-                      ? 'bg-accent/25 border-1.5 border-accent outline outline-2 outline-accent/60 animate-reticle-lock'
+                      ? 'bg-accent/20 border-[1.5px] border-accent outline outline-1 outline-accent/50 animate-reticle-lock'
                       : showAllBboxes
                       ? 'border border-zinc-300 bg-zinc-100/60'
                       : 'border border-transparent'
                   }`}
                 >
-                  <div className="absolute -left-14 top-1 text-[10px] font-mono text-zinc-600 bg-white border border-zinc-300 px-1 py-0.5 rounded-[1px] hidden md:block">
+                  <ReticleCorners active={activeCitation === 2} />
+                  <div className="inline-block md:absolute md:-left-14 md:top-1 mb-1 md:mb-0 text-[10px] font-mono text-zinc-600 bg-white border border-zinc-300 px-1 py-0.5 rounded-[1px]">
                     [Ref 2]
                   </div>
                   <div className="absolute right-2 -top-2.5 text-[9px] font-mono text-zinc-700 bg-white px-1.5 py-0.5 rounded-[1px] border border-zinc-300">
@@ -303,13 +507,14 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                   ref={target3Ref}
                   className={`relative p-3 rounded-[1px] transition-all duration-150 ${
                     activeCitation === 3
-                      ? 'bg-accent/25 border-1.5 border-accent outline outline-2 outline-accent/60 animate-reticle-lock'
+                      ? 'bg-accent/20 border-[1.5px] border-accent outline outline-1 outline-accent/50 animate-reticle-lock'
                       : showAllBboxes
                       ? 'border border-zinc-300 bg-zinc-100/60'
                       : 'border border-transparent'
                   }`}
                 >
-                  <div className="absolute -left-14 top-1 text-[10px] font-mono text-zinc-600 bg-white border border-zinc-300 px-1 py-0.5 rounded-[1px] hidden md:block">
+                  <ReticleCorners active={activeCitation === 3} />
+                  <div className="inline-block md:absolute md:-left-14 md:top-1 mb-1 md:mb-0 text-[10px] font-mono text-zinc-600 bg-white border border-zinc-300 px-1 py-0.5 rounded-[1px]">
                     [Ref 3]
                   </div>
                   <p className="text-zinc-900 leading-relaxed">
@@ -338,7 +543,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
               </section>
 
               {/* Vərəq Altlığı */}
-              <div className="mt-10 pt-4 border-t border-zinc-300 flex justify-between items-center text-[10px] font-mono text-zinc-500">
+              <div className="mt-10 pt-4 border-t border-zinc-300 flex flex-wrap justify-between items-center gap-2 text-[10px] font-mono text-zinc-500">
                 <span>Corpus Grounding Engine • Verified Checksum: 0x8fa2b9</span>
                 <span>MIT CSAIL Systems</span>
               </div>
@@ -346,9 +551,9 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
           ) : (
             <>
               {/* Live Uploaded / Real PDF Spatial Chunks View */}
-              <div className="border-b border-zinc-300 pb-3 mb-6 font-mono text-[10px] text-zinc-500 uppercase tracking-wider flex justify-between items-center gap-3">
+              <div className="border-b border-zinc-300 pb-3 mb-6 font-mono text-[10px] text-zinc-500 uppercase tracking-wider flex flex-wrap justify-between items-center gap-3">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="truncate max-w-[260px]" title={documentName}>
+                  <span className="truncate max-w-[200px] sm:max-w-[260px]" title={documentName}>
                     {documentName}
                   </span>
                   <span className="shrink-0">•</span>
@@ -391,6 +596,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                           ))}
                         {/* Enclosing Chunk BBox */}
                         <button
+                          ref={isSelected ? selectedSpatialRef : undefined}
                           type="button"
                           onClick={() => onSelectChunk?.(chunk.id)}
                           style={{
@@ -401,11 +607,12 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                           }}
                           className={`absolute text-left p-1 overflow-hidden transition-all duration-150 ${
                             isSelected
-                              ? 'border-2 border-accent bg-accent/25 z-20 animate-reticle-lock'
+                              ? 'border-[1.5px] border-accent bg-accent/20 z-20 animate-reticle-lock'
                               : 'border border-zinc-400/70 bg-zinc-200/35 hover:border-accent hover:bg-accent/15 z-10'
                           }`}
                           title={`#${chunk.readingOrder + 1} | Col ${chunk.columnIndex + 1} | Chars ${chunk.charStartIndex}..${chunk.charEndIndex}`}
                         >
+                          <ReticleCorners active={isSelected} inset />
                           <span className="inline-block bg-zinc-900 text-white font-mono text-[8px] px-1 leading-tight mr-1">
                             #{chunk.readingOrder + 1} C{chunk.columnIndex + 1}
                           </span>
@@ -431,15 +638,17 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                     return (
                       <div
                         key={chunk.id}
+                        ref={isSelected ? selectedChunkRef : undefined}
                         onClick={() => onSelectChunk?.(chunk.id)}
                         className={`relative p-3.5 rounded-[1px] cursor-pointer transition-all duration-150 ${
                           isSelected
-                            ? 'bg-accent/25 border-1.5 border-accent outline outline-2 outline-accent/60 animate-reticle-lock'
+                            ? 'bg-accent/20 border-[1.5px] border-accent outline outline-1 outline-accent/50 animate-reticle-lock'
                             : showAllBboxes
                             ? 'border border-zinc-400 bg-zinc-100/70'
                             : 'border border-zinc-200 hover:border-zinc-400 bg-white/60'
                         }`}
                       >
+                        <ReticleCorners active={isSelected} />
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2 font-mono text-[9px] text-zinc-600">
                           <span className="px-1.5 py-0.5 bg-zinc-900 text-zinc-100 rounded-[1px]">
                             #{chunk.readingOrder + 1} • COL {chunk.columnIndex + 1} •{' '}
@@ -475,7 +684,7 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
                 </div>
               )}
 
-              <div className="mt-10 pt-4 border-t border-zinc-300 flex justify-between items-center text-[10px] font-mono text-zinc-500">
+              <div className="mt-10 pt-4 border-t border-zinc-300 flex flex-wrap justify-between items-center gap-2 text-[10px] font-mono text-zinc-500">
                 <span>
                   XY-Cut Coordinate Parser • {sortedChunks.length} blocks on page {currentPage}
                 </span>
@@ -483,7 +692,8 @@ export const EvidenceCanvas: React.FC<EvidenceCanvasProps> = ({
               </div>
             </>
           )}
-        </article>
+          </article>
+        </div>
       </div>
     </section>
   );

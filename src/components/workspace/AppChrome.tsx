@@ -51,10 +51,10 @@ export const AppChrome: React.FC<AppChromeProps> = ({
   }, []);
 
   return (
-    <header className="h-11 border-b border-panelBorder bg-panel px-3.5 flex items-center justify-between shrink-0 z-40 text-xs font-mono select-none">
+    <header className="min-h-11 lg:h-11 border-b border-panelBorder bg-panel px-3 lg:px-3.5 py-1.5 lg:py-0 flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 shrink-0 z-40 text-xs font-mono select-none">
       {/* Sol Bölmə: Logo və Sistem Əməliyyat Statusu */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 font-medium text-textPrimary text-xs">
+      <div className="order-1 flex items-center gap-2 lg:gap-3 min-w-0">
+        <div className="flex items-center gap-2 font-medium text-textPrimary text-[11px] sm:text-xs shrink-0">
           {/* VERITAS Precision Optical Reticle & Monogram (Stitch Brandmark) */}
           <svg
             className="w-4 h-4 shrink-0"
@@ -77,13 +77,13 @@ export const AppChrome: React.FC<AppChromeProps> = ({
           </span>
           <span className="text-zinc-500 font-normal">// CORPUS</span>
         </div>
-        <span className="text-panelBorder">|</span>
-        <div className="flex items-center gap-1.5 text-zinc-400 text-xs font-mono">
+        <span className="text-panelBorder hidden md:inline-block">|</span>
+        <div className="hidden md:flex items-center gap-1.5 text-zinc-400 text-xs font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-status-pass" />
           <span>prod-us-east-1</span>
         </div>
         <span className="text-panelBorder hidden sm:inline-block">|</span>
-        <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[11px] font-mono">
+        <div className="hidden sm:flex items-center gap-1.5 px-2 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] text-[11px] font-mono shrink-0">
           <span
             className={`w-1.5 h-1.5 rounded-full ${
               engineStatus === 'online'
@@ -101,68 +101,68 @@ export const AppChrome: React.FC<AppChromeProps> = ({
               : 'Checking .NET 9...'}
           </span>
         </div>
-        <span className="text-panelBorder hidden md:inline-block">|</span>
-        <span className="text-zinc-500 text-xs font-mono hidden md:inline-block">
+        <span className="text-panelBorder hidden xl:inline-block">|</span>
+        <span className="text-zinc-500 text-xs font-mono hidden xl:inline-block">
           {latencyMs}ms
         </span>
       </div>
 
       {/* Orta Bölmə: Əsas Naviqasiya Tabları (Monoxrom Swiss Stili) */}
-      <nav className="flex items-center gap-0.5 bg-obsidian p-0.5 rounded-[2px] border border-panelBorder text-xs font-sans">
+      <nav className="order-3 lg:order-2 w-full lg:w-auto flex items-center gap-0.5 bg-obsidian p-0.5 rounded-[2px] border border-panelBorder text-[11px] sm:text-xs font-sans overflow-x-auto">
         <button
           onClick={() => onTabChange('WORKSPACE')}
-          className={`nav-tab px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
+          className={`nav-tab flex-1 lg:flex-initial justify-center whitespace-nowrap shrink-0 px-2 sm:px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
             activeTab === 'WORKSPACE'
               ? 'bg-[#1c2029] text-textPrimary font-medium border border-panelBorder shadow-sm'
               : 'text-zinc-400 hover:text-textPrimary'
           }`}
         >
-          <Terminal className="w-3.5 h-3.5 text-zinc-300" />
+          <Terminal className="w-3.5 h-3.5 text-zinc-300 shrink-0" />
           <span>Workspace</span>
         </button>
 
         <button
           onClick={() => onTabChange('CORPUS')}
-          className={`nav-tab px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
+          className={`nav-tab flex-1 lg:flex-initial justify-center whitespace-nowrap shrink-0 px-2 sm:px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
             activeTab === 'CORPUS'
               ? 'bg-[#1c2029] text-textPrimary font-medium border border-panelBorder shadow-sm'
               : 'text-zinc-400 hover:text-textPrimary'
           }`}
         >
-          <Files className="w-3.5 h-3.5 text-zinc-400" />
+          <Files className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
           <span>Corpus</span>
-          <span className="text-[10px] px-1 bg-panelBorder text-zinc-400 rounded-[1px] font-mono">
+          <span className="text-[10px] px-1 bg-panelBorder text-zinc-400 rounded-[1px] font-mono hidden sm:inline">
             4
           </span>
         </button>
 
         <button
           onClick={() => onTabChange('EVALS')}
-          className={`nav-tab px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
+          className={`nav-tab flex-1 lg:flex-initial justify-center whitespace-nowrap shrink-0 px-2 sm:px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
             activeTab === 'EVALS'
               ? 'bg-[#1c2029] text-textPrimary font-medium border border-panelBorder shadow-sm'
               : 'text-zinc-400 hover:text-textPrimary'
           }`}
         >
-          <BarChart2 className="w-3.5 h-3.5 text-zinc-400" />
+          <BarChart2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
           <span>Benchmarks</span>
         </button>
 
         <button
           onClick={() => onTabChange('CONFIG')}
-          className={`nav-tab px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
+          className={`nav-tab flex-1 lg:flex-initial justify-center whitespace-nowrap shrink-0 px-2 sm:px-3 py-1 rounded-[1px] transition flex items-center gap-1.5 ${
             activeTab === 'CONFIG'
               ? 'bg-[#1c2029] text-textPrimary font-medium border border-panelBorder shadow-sm'
               : 'text-zinc-400 hover:text-textPrimary'
           }`}
         >
-          <Sliders className="w-3.5 h-3.5 text-zinc-400" />
+          <Sliders className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
           <span>Configuration</span>
         </button>
       </nav>
 
       {/* Sağ Bölmə: Telemetriya və Koordinat Sinxronizasiyası */}
-      <div className="flex items-center gap-3">
+      <div className="order-2 lg:order-3 flex items-center gap-2 lg:gap-3 shrink-0">
         <div className="hidden lg:flex items-center gap-2 border border-panelBorder px-2.5 py-0.5 rounded-[2px] text-xs bg-panel text-zinc-400 font-mono">
           <span className="text-zinc-500">Chunks:</span>
           <span className="text-zinc-300 font-medium">
@@ -170,12 +170,12 @@ export const AppChrome: React.FC<AppChromeProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-zinc-400 border border-panelBorder px-2 py-0.5 rounded-[2px] bg-panel font-sans">
-          <span className="w-1.5 h-1.5 rounded-full bg-status-pass" />
+        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-zinc-400 border border-panelBorder px-2 py-0.5 rounded-[2px] bg-panel font-sans whitespace-nowrap">
+          <span className="w-1.5 h-1.5 rounded-full bg-status-pass shrink-0" />
           <span className="text-zinc-300">Coordinates synced</span>
         </div>
 
-        <div className="w-6 h-6 rounded-[2px] bg-[#222731] flex items-center justify-center text-zinc-300 text-xs font-mono border border-panelBorder">
+        <div className="w-6 h-6 rounded-[2px] bg-[#222731] flex items-center justify-center text-zinc-300 text-xs font-mono border border-panelBorder shrink-0">
           VK
         </div>
       </div>

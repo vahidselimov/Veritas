@@ -16,6 +16,7 @@ interface ResearchStreamProps {
   onCitationClick: (citationIndex: number) => void;
   onClearSession: () => void;
   onSubmitQuery: (query: string) => void;
+  className?: string;
 }
 
 export const ResearchStream: React.FC<ResearchStreamProps> = ({
@@ -23,6 +24,7 @@ export const ResearchStream: React.FC<ResearchStreamProps> = ({
   onCitationClick,
   onClearSession,
   onSubmitQuery,
+  className = '',
 }) => {
   const [traceOpen, setTraceOpen] = useState(false);
   const [queryInput, setQueryInput] = useState(
@@ -37,7 +39,9 @@ export const ResearchStream: React.FC<ResearchStreamProps> = ({
   };
 
   return (
-    <section className="flex-1 md:w-[42%] max-w-[48%] border-r border-panelBorder flex flex-col bg-obsidian overflow-hidden select-none">
+    <section
+      className={`w-full md:w-[46%] xl:w-[42%] md:max-w-[48%] md:border-r border-panelBorder flex-1 md:flex-initial flex flex-col bg-obsidian overflow-hidden select-none ${className}`}
+    >
       {/* Sessiya Başlığı */}
       <div className="h-10 border-b border-panelBorder px-4 flex items-center justify-between text-xs font-mono bg-panel/70 shrink-0">
         <div className="flex items-center gap-2 font-sans text-xs">
@@ -240,33 +244,35 @@ export const ResearchStream: React.FC<ResearchStreamProps> = ({
       </div>
 
       {/* Tədqiqat Sorğusu Daxiletmə Sahəsi */}
-      <div className="p-3 border-t border-panelBorder bg-panel shrink-0">
+      <div className="p-2.5 sm:p-3 border-t border-panelBorder bg-panel shrink-0">
         <form onSubmit={handleSubmit} className="relative font-sans">
-          <div className="flex items-center gap-2 bg-obsidian border border-panelBorder rounded-[2px] px-3 py-1.5 focus-within:border-zinc-500 transition">
-            <Search className="w-3.5 h-3.5 text-zinc-500" />
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 bg-obsidian border border-panelBorder rounded-[2px] px-2.5 sm:px-3 py-1.5 focus-within:border-zinc-500 transition">
+            <Search className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
             <input
               type="text"
               value={queryInput}
               onChange={(e) => setQueryInput(e.target.value)}
               placeholder="Ask a research question or search paper coordinates..."
-              className="bg-transparent border-none outline-none text-xs text-textPrimary placeholder-textMuted flex-1 font-sans"
+              className="bg-transparent border-none outline-none text-xs text-textPrimary placeholder-textMuted flex-1 min-w-[140px] font-sans"
             />
-            <select className="bg-panel border border-panelBorder text-zinc-400 text-[11px] font-mono rounded-[2px] px-2 py-1 focus:outline-none">
-              <option>corpus-4.8 (hybrid)</option>
-              <option>claude-3.5-sonnet</option>
-              <option>local-vllm</option>
-            </select>
-            <span className="text-[10px] font-mono text-zinc-500 border border-panelBorder px-1.5 py-0.5 rounded-[1px] bg-panel">
-              ⌘K
-            </span>
-            <button
-              type="submit"
-              className="px-3.5 py-1 bg-white hover:bg-zinc-200 text-black font-sans font-medium text-xs rounded-[2px] transition shadow-sm active:scale-[0.98]"
-            >
-              Run query
-            </button>
+            <div className="flex items-center gap-1.5 w-full lg:w-auto justify-between lg:justify-end shrink-0">
+              <select className="bg-panel border border-panelBorder text-zinc-400 text-[11px] font-mono rounded-[2px] px-2 py-1 focus:outline-none">
+                <option>corpus-4.8 (hybrid)</option>
+                <option>claude-3.5-sonnet</option>
+                <option>local-vllm</option>
+              </select>
+              <span className="hidden lg:inline-block text-[10px] font-mono text-zinc-500 border border-panelBorder px-1.5 py-0.5 rounded-[1px] bg-panel">
+                ⌘K
+              </span>
+              <button
+                type="submit"
+                className="px-3 sm:px-3.5 py-1 bg-white hover:bg-zinc-200 text-black font-sans font-medium text-xs rounded-[2px] transition shadow-sm active:scale-[0.98] whitespace-nowrap"
+              >
+                Run query
+              </button>
+            </div>
           </div>
-          <div className="flex items-center justify-between mt-1.5 px-1 text-[11px] font-sans text-zinc-500">
+          <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 px-1 text-[11px] font-sans text-zinc-500">
             <span>Model: corpus-engine • 128k context</span>
             <span className="font-mono text-[10px]">deterministic trace</span>
           </div>

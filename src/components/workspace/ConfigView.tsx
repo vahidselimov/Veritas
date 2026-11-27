@@ -7,32 +7,45 @@ export const ConfigView: React.FC = () => {
   const [denseWeight, setDenseWeight] = useState(65);
   const [rrfK, setRrfK] = useState(60);
   const [model, setModel] = useState('gpt-4o');
+  const [savedNotice, setSavedNotice] = useState(false);
+
+  const handleSave = () => {
+    setSavedNotice(true);
+    setTimeout(() => setSavedNotice(false), 2500);
+  };
 
   return (
     <div className="flex-1 bg-obsidian flex flex-col overflow-hidden select-none">
       {/* Config Header */}
-      <div className="h-12 border-b border-panelBorder bg-panel px-6 flex items-center justify-between text-xs font-mono shrink-0">
-        <div className="flex items-center gap-3">
-          <Sliders className="w-4 h-4 text-accent" />
-          <span className="text-textPrimary font-bold">
+      <div className="min-h-12 border-b border-panelBorder bg-panel px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <Sliders className="w-4 h-4 text-accent shrink-0" />
+          <span className="text-textPrimary font-bold break-words">
             SYSTEM ENGINE CONFIGURATION &amp; HYPERPARAMETERS
           </span>
         </div>
-        <button
-          onClick={() => alert('Configuration saved to environment')}
-          className="px-3 py-1 bg-white hover:bg-zinc-200 text-black font-mono font-bold text-xs rounded-[2px] transition flex items-center gap-1.5"
-        >
-          <Save className="w-3.5 h-3.5" />
-          <span>SAVE CONFIG</span>
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          {savedNotice && (
+            <span className="px-2 py-0.5 bg-obsidian border border-status-pass text-status-pass text-[10px] rounded-[1px]">
+              SAVED TO RUNTIME
+            </span>
+          )}
+          <button
+            onClick={handleSave}
+            className="px-3 py-1 bg-white hover:bg-zinc-200 text-black font-mono font-bold text-xs rounded-[2px] transition flex items-center gap-1.5 whitespace-nowrap"
+          >
+            <Save className="w-3.5 h-3.5" />
+            <span>SAVE CONFIG</span>
+          </button>
+        </div>
       </div>
 
       {/* Config Content */}
-      <div className="flex-1 overflow-y-auto p-6 max-w-4xl space-y-6">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 max-w-4xl space-y-6">
         {/* Hibrid Axtarış Düsturu */}
-        <div className="border border-panelBorder bg-panel rounded-[2px] p-5 space-y-4">
+        <div className="border border-panelBorder bg-panel rounded-[2px] p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-textPrimary border-b border-panelBorder pb-2">
-            <Database className="w-4 h-4 text-accent" />
+            <Database className="w-4 h-4 text-accent shrink-0" />
             <span>HYBRID RETRIEVAL &amp; RRF PARAMETERS</span>
           </div>
 
@@ -55,7 +68,7 @@ export const ConfigView: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 pt-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             <div>
               <label className="block text-xs font-mono text-zinc-400 mb-1">
                 RRF Smoothing Constant (k)
@@ -75,9 +88,12 @@ export const ConfigView: React.FC = () => {
               <label className="block text-xs font-mono text-zinc-400 mb-1">
                 Top-k Candidate Chunks
               </label>
-              <select className="w-full bg-obsidian border border-panelBorder px-3 py-1.5 rounded-[2px] text-xs font-mono text-textPrimary">
+              <select
+                defaultValue="40 chunks"
+                className="w-full bg-obsidian border border-panelBorder px-3 py-1.5 rounded-[2px] text-xs font-mono text-textPrimary"
+              >
                 <option>20 chunks</option>
-                <option selected>40 chunks</option>
+                <option>40 chunks</option>
                 <option>80 chunks</option>
               </select>
             </div>
@@ -85,13 +101,13 @@ export const ConfigView: React.FC = () => {
         </div>
 
         {/* LLM & Embedding Models */}
-        <div className="border border-panelBorder bg-panel rounded-[2px] p-5 space-y-4">
+        <div className="border border-panelBorder bg-panel rounded-[2px] p-4 sm:p-5 space-y-4">
           <div className="flex items-center gap-2 text-xs font-mono font-bold text-textPrimary border-b border-panelBorder pb-2">
-            <Cpu className="w-4 h-4 text-accent" />
+            <Cpu className="w-4 h-4 text-accent shrink-0" />
             <span>INFERENCE &amp; EMBEDDING PROVIDERS</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-mono text-zinc-400 mb-1">
                 Synthesis LLM Model

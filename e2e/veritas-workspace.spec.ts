@@ -129,4 +129,86 @@ test.describe('VERITAS // CORPUS — Swiss Grid Research Workspace E2E', () => {
       await page.request.delete(`/api/v1/documents/${createdId}`);
     }
   });
+
+  test('should support optical reticle corners and zoom mechanics (60%-200% & Reset)', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+
+    // Toolbar filename must not be squeezed to zero at 1440px
+    const docBadge = page.getByTestId('canvas-document-name');
+    await expect(docBadge).toBeVisible();
+    const badgeBox = await docBadge.boundingBox();
+    expect(badgeBox?.width ?? 0).toBeGreaterThan(40);
+
+    // 4-corner Swiss optical reticle must appear on locked citation
+    await expect(page.getByTestId('optical-reticle')).toBeVisible();
+
+    const resetBtn = page.getByRole('button', { name: 'Reset zoom' });
+    await expect(resetBtn).toHaveText('100%');
+
+    const zoomIn = page.getByRole('button', { name: 'Zoom in' });
+    const zoomOut = page.getByRole('button', { name: 'Zoom out' });
+
+    await zoomIn.click();
+    await zoomIn.click();
+    await expect(resetBtn).toHaveText('120%');
+
+    await resetBtn.click();
+    await expect(resetBtn).toHaveText('100%');
+
+    await zoomOut.click();
+    await zoomOut.click();
+    await expect(resetBtn).toHaveText('80%');
+
+    await resetBtn.click();
+    await expect(resetBtn).toHaveText('100%');
+  });
+
+  test('should adapt workspace cleanly for mobile viewports (390x844) without horizontal overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+
+    const hasNoHorizontalOverflow = async () =>
+      page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
+    expect(await hasNoHorizontalOverflow()).toBe(true);
+
+    // Mobile switcher bar is visible and Chat is default
+    await expect(page.getByTestId('mobile-pane-chat')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('Synthesized Response')).toBeVisible();
+
+    // Switch to Sources tab on mobile
+    await page.getByTestId('mobile-pane-sources').click();
+    await expect(page.getByText('Indexed Documents')).toBeVisible();
+    expect(await hasNoHorizontalOverflow()).toBe(true);
+
+    // Switch back to Chat and click citation [2] -> should auto-switch to Paper + show optical reticle
+    await page.getByTestId('mobile-pane-chat').click();
+    await page.getByRole('button', { name: '[2]' }).click();
+    await expect(page.getByTestId('mobile-pane-canvas')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('optical-reticle')).toBeVisible();
+    await expect(page.getByText('[Ref 2]')).toBeVisible();
+    expect(await hasNoHorizontalOverflow()).toBe(true);
+
+    // Verify Corpus, Benchmarks, Configuration tabs also avoid viewport overflow on mobile
+    for (const tabName of ['Corpus', 'Benchmarks', 'Configuration']) {
+      await page.getByRole('button', { name: tabName }).click();
+      expect(await hasNoHorizontalOverflow()).toBe(true);
+    }
+  });
+
+  test('should support tablet viewport (768x1024) split view and Sources slide-over drawer', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/');
+
+    // Chat and Paper panes sit side-by-side on tablet
+    await expect(page.getByText('Synthesized Response')).toBeVisible();
+    await expect(page.getByText('Zero-Copy Asynchronous Pinned Allocations')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+
+    // Slide-over Sources drawer opens & closes cleanly
+    await page.getByTestId('tablet-sources-toggle').click();
+    await expect(page.getByText('Indexed Documents')).toBeVisible();
+    await page.getByRole('button', { name: 'Close sources drawer' }).click();
+  });
 });

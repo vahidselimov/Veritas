@@ -31,6 +31,8 @@ interface DocumentSidebarProps {
   onDenseWeightChange: (weight: number) => void;
   topK: number;
   onTopKChange: (k: number) => void;
+  className?: string;
+  onCloseDrawer?: () => void;
 }
 
 export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
@@ -40,6 +42,8 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   onDenseWeightChange,
   topK,
   onTopKChange,
+  className = '',
+  onCloseDrawer,
 }) => {
   const [retrievalOpen, setRetrievalOpen] = useState(true);
   const [liveDocs, setLiveDocs] = useState<DocItem[]>([]);
@@ -167,16 +171,30 @@ export const DocumentSidebar: React.FC<DocumentSidebarProps> = ({
   const docs = liveDocs.length > 0 ? liveDocs : defaultDocs;
 
   return (
-    <aside className="w-[260px] bg-panel border-r border-panelBorder flex flex-col shrink-0 select-none">
+    <aside
+      className={`w-full xl:w-[260px] bg-panel border-r border-panelBorder flex flex-col shrink-0 select-none ${className}`}
+    >
       {/* Başlıq */}
-      <div className="h-10 border-b border-panelBorder px-3 flex items-center justify-between text-xs font-sans">
+      <div className="h-10 border-b border-panelBorder px-3 flex items-center justify-between text-xs font-sans shrink-0">
         <div className="flex items-center gap-2 text-zinc-400">
           <Folder className="w-3.5 h-3.5 text-zinc-400" />
           <span className="font-medium text-textPrimary">Indexed Documents</span>
         </div>
-        <span className="text-[11px] text-zinc-400 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] font-mono">
-          {docs.length} sources
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-zinc-400 px-1.5 py-0.5 bg-obsidian border border-panelBorder rounded-[1px] font-mono">
+            {docs.length} sources
+          </span>
+          {onCloseDrawer && (
+            <button
+              type="button"
+              onClick={onCloseDrawer}
+              aria-label="Close sources drawer"
+              className="hidden md:inline-flex xl:hidden p-1 text-zinc-400 hover:text-textPrimary border border-panelBorder rounded-[1px] bg-obsidian"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Sənəd Yükləmə Dropzone */}
